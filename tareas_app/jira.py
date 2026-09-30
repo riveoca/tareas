@@ -3,6 +3,8 @@ from __future__ import annotations
 
 import time
 from collections import defaultdict
+from datetime import datetime, timezone
+from zoneinfo import ZoneInfo
 
 import httpx
 
@@ -128,11 +130,12 @@ class JiraClient:
         return out
 
     def sprint_issues(self, sprint_id: int) -> dict:
-        """Datos de un sprint y sus incidencias (sin épicas) con su fecha de creación, para la gráfica."""
+        """Datos de un sprint y sus incidencias (sin épicas) con su fecha de creación, para la gráfica de tareas."""
         s = self._agile("GET", f"/sprint/{sprint_id}")
+        local = lambda v: _dt(v).date().isoformat() if v else ""
         sprint = {"id": s["id"], "name": s["name"], "state": s.get("state"),
-                  "startDate": (s.get("startDate") or "")[:10], "endDate": (s.get("endDate") or "")[:10],
-                  "completeDate": (s.get("completeDate") or "")[:10]}
+                  "startDate": local(s.get("startDate")), "endDate": local(s.get("endDate")),
+                  "completeDate": local(s.get("completeDate"))}
         epic_types = [t["id"] for t in self.issue_types() if t["level"] == 1]
         jql = f"sprint = {int(sprint_id)}"
         if epic_types:
@@ -155,6 +158,70 @@ class JiraClient:
             if not token or page.get("isLast", True):
                 break
         return {"sprint": sprint, "issues": issues}
+
+    def sprint_burnup(self, sprint_id: int, assignee: str | None = None) -> dict:
+        """Informe de trabajo completado (burnup) con los datos del burndown de Jira (API interna greenhopper).
+        Por cada evento tras el inicio: totales de puntos creados (alcance = tareas en el sprint) y cerrados
+        (en el sprint y hechas; relativo al inicio, así empieza en 0). Tiempos en ms epoch.
+        Con assignee (nombre visible, o "__none") solo cuentan las tareas del sprint asignadas hoy a esa persona."""
+        keys = None
+        if assignee:
+            keys = {i["key"] for i in self.sprint_issues(sprint_id)["issues"]
+                    if (i["assignee"] or "__none") == assignee}
+        s = self._agile("GET", f"/sprint/{sprint_id}")
+        d = self._request("GET", f"{settings.jira_url}/rest/greenhopper/1.0/rapid/charts/scopechangeburndownchart.json",
+                          params={"rapidViewId": s["originBoardId"], "sprintId": sprint_id})
+        # Esta API da las horas locales del tablero escritas como si fueran UTC: se pasan a epoch real
+        tz = ZoneInfo((d.get("workRateData") or {}).get("timezone") or "UTC")
+        real = lambda ms: int(datetime.fromtimestamp(ms / 1000, timezone.utc).replace(tzinfo=tz).timestamp() * 1000)
+        start, end = d["startTime"], d["endTime"]
+        now = d.get("completeTime") or d["now"]
+        summaries = d.get("issueToSummary", {})
+        state: dict[str, dict] = defaultdict(lambda: {"in": False, "pts": None, "done": False})
+        scope = lambda st: (st["pts"] or 0) if st["in"] else 0
+        closed = lambda st: (st["pts"] or 0) if st["in"] and st["done"] else 0
+        tot = {"scope": 0.0, "closed": 0.0}
+        base, events = None, []
+        for t in sorted(d.get("changes", {}), key=int):
+            ts = int(t)
+            if ts > now:
+                break
+            if ts > start and base is None:
+                base = dict(tot)
+            for e in d["changes"][t]:
+                if keys is not None and e["key"] not in keys:
+                    continue
+                st = state[e["key"]]
+                was, s0, c0 = dict(st), scope(st), closed(st)
+                if "added" in e:
+                    st["in"] = bool(e["added"])
+                if "statC" in e:
+                    st["pts"] = e["statC"].get("newValue")
+                if "column" in e:
+                    st["done"] = not e["column"].get("notDone", True)
+                tot["scope"] += scope(st) - s0
+                tot["closed"] += closed(st) - c0
+                if ts <= start:
+                    continue
+                if st["in"] != was["in"]:
+                    kind = "Tarea añadida" if st["in"] else "Tarea quitada"
+                elif st["done"] != was["done"] and st["in"]:
+                    kind = "Tarea cerrada" if st["done"] else "Tarea reabierta"
+                elif st["pts"] != was["pts"] and st["in"]:
+                    kind = f"Cambio de puntos {_num(was['pts'])} → {_num(st['pts'])}"
+                else:
+                    continue
+                events.append({"t": real(ts), "key": e["key"], "summary": summaries.get(e["key"], ""), "event": kind,
+                               "scope": tot["scope"], "closed": tot["closed"]})
+        if base is None:
+            base = dict(tot)
+        for ev in events:  # cerrados relativos al inicio del sprint
+            ev["closed"] -= base["closed"]
+        # Si el sprint sigue abierto pasada su fecha de fin (o se cerró tarde), el eje llega hasta hoy / el cierre
+        return {"name": s["name"], "state": s.get("state"), "start": real(start), "end": real(max(end, now)),
+                "planned_end": real(end), "now": real(now), "finished": bool(d.get("completeTime")),
+                "field": (d.get("statisticField") or {}).get("name", "Puntos de historia"),
+                "assignee": assignee, "start_scope": base["scope"], "closed_before": base["closed"], "events": events}
 
     def _field_by_name(self, configured: str, names: tuple[str, ...]) -> str | None:
         if configured:
@@ -182,6 +249,7 @@ class JiraClient:
             "users": self.assignable_users(),
             "priorities": self.priorities(),
             "sprints": self.sprints(),
+            "me": self.myself().get("displayName"),
             "epics": self.epics(),
             "story_points_field": self.story_points_field(),
             "start_date_field": self.start_date_field(),
@@ -293,6 +361,15 @@ class JiraClient:
                         if r["id"] in {t.id for t in chunk}:
                             r["warnings"].append(f"no se pudo mover al sprint: {e}")
         return results
+
+
+def _num(v) -> str:
+    return "—" if v is None else f"{v:g}"
+
+
+def _dt(value: str) -> datetime:
+    """Fecha ISO de Jira (con Z o -0500) a hora local."""
+    return datetime.fromisoformat(value).astimezone()
 
 
 def to_adf(text: str) -> dict:
