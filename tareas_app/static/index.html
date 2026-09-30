@@ -1,0 +1,829 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Gestor de tareas</title>
+<style>
+  :root {
+    --bg: #f4f5f7; --panel: #fff; --text: #1d2330; --muted: #6b7280; --border: #e2e5ea; --row: #fafbfc;
+    --accent: #2563eb; --accent-soft: #e8efff; --ok: #15803d; --ok-soft: #e7f6ec; --err: #b91c1c; --warn: #b45309;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg: #111418; --panel: #1a1e24; --text: #e6e8eb; --muted: #9aa3ad; --border: #2c323a; --row: #1d2229;
+      --accent: #5b8cff; --accent-soft: #1e2a44; --ok: #4ade80; --ok-soft: #173024; --err: #f87171; --warn: #fbbf24; }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; font: 14px/1.45 system-ui, -apple-system, "Segoe UI", sans-serif; background: var(--bg); color: var(--text); }
+  button, input, select, textarea { font: inherit; color: inherit; }
+  button { cursor: pointer; border: 1px solid var(--border); background: var(--panel); border-radius: 6px; padding: 6px 11px; white-space: nowrap; }
+  button.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+  button.ghost { border-color: transparent; background: transparent; color: var(--muted); padding: 2px 6px; }
+  button.danger { color: var(--err); }
+  button:disabled { opacity: .5; cursor: default; }
+  input, select, textarea { background: var(--panel); border: 1px solid var(--border); border-radius: 6px; padding: 5px 7px; width: 100%; min-width: 0; }
+  textarea { resize: vertical; }
+  .cell-input { border-color: transparent; background: transparent; }
+  .cell-input:hover, .cell-input:focus { border-color: var(--border); background: var(--panel); }
+
+  .topbar { position: sticky; top: 0; z-index: 5; display: flex; gap: 10px; align-items: center; padding: 10px 20px; background: var(--panel); border-bottom: 1px solid var(--border); flex-wrap: wrap; }
+  .topbar h1 { font-size: 17px; margin: 0; }
+  .spacer { flex: 1; }
+  .status { font-size: 12px; color: var(--muted); }
+  .dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 4px; }
+  main { max-width: 1400px; margin: 0 auto; padding: 16px 20px 60px; display: grid; gap: 16px; }
+  .card { background: var(--panel); border: 1px solid var(--border); border-radius: 10px; min-width: 0; }
+  .card-head { display: flex; align-items: center; gap: 10px; padding: 10px 14px; border-bottom: 1px solid var(--border); flex-wrap: wrap; }
+  .card-head h2 { font-size: 15px; margin: 0; }
+  .card-body { padding: 14px; }
+  .muted { color: var(--muted); font-size: 12px; }
+
+  .defaults { display: flex; gap: 14px; flex-wrap: wrap; font-size: 13px; padding: 9px 14px; background: var(--accent-soft); border-radius: 10px; align-items: center; }
+  .defaults b { font-weight: 600; }
+
+  .tabs { display: flex; gap: 4px; }
+  .tabs button { border: none; background: none; padding: 6px 10px; border-bottom: 2px solid transparent; border-radius: 0; color: var(--muted); }
+  .tabs button.on { border-bottom-color: var(--accent); color: var(--accent); font-weight: 600; }
+  .drop { border: 2px dashed var(--border); border-radius: 10px; padding: 26px; text-align: center; color: var(--muted); cursor: pointer; }
+  .drop.over { border-color: var(--accent); background: var(--accent-soft); }
+  .note { margin-top: 10px; padding: 8px 12px; border-radius: 8px; background: var(--ok-soft); font-size: 13px; }
+  .note.err { background: transparent; border: 1px solid var(--err); color: var(--err); }
+
+  .filters { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+  .filters select, .filters input { width: auto; }
+  .table-wrap { overflow-x: auto; }
+  table { width: 100%; border-collapse: collapse; min-width: 1100px; }
+  th, td { text-align: left; padding: 5px 6px; border-bottom: 1px solid var(--border); vertical-align: middle; }
+  th { font-size: 12px; color: var(--muted); font-weight: 600; background: var(--row); }
+  tr.detail td { background: var(--row); padding: 10px 14px 14px 44px; }
+  tr.sel td { background: var(--accent-soft); }
+  td.num input { width: 64px; }
+  td.date input { width: 138px; }
+  .col-title { min-width: 280px; }
+  .col-epic select { min-width: 170px; max-width: 230px; }
+  .col-user select { min-width: 160px; max-width: 200px; }
+  .col-sprint select { min-width: 130px; max-width: 170px; }
+  .filters select { max-width: 200px; }
+  .detail-grid { display: grid; grid-template-columns: 2fr 1fr; gap: 10px; }
+  .detail-grid label { font-size: 12px; color: var(--muted); display: grid; gap: 3px; }
+  .key { font-size: 12px; padding: 1px 6px; border-radius: 4px; border: 1px solid var(--ok); color: var(--ok); text-decoration: none; white-space: nowrap; }
+  .pending { font-size: 12px; color: var(--muted); white-space: nowrap; }
+  .bulk { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; padding: 8px 14px; background: var(--accent-soft); border-bottom: 1px solid var(--border); }
+  .bulk select, .bulk input { width: auto; }
+  .empty { color: var(--muted); text-align: center; padding: 40px 10px; }
+  .results li { margin-bottom: 3px; }
+  .ok { color: var(--ok); } .err { color: var(--err); } .warn { color: var(--warn); }
+  .spinner { display: inline-block; width: 12px; height: 12px; border: 2px solid currentColor; border-top-color: transparent; border-radius: 50%; animation: spin 1s linear infinite; vertical-align: -2px; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  dialog { border: 1px solid var(--border); border-radius: 12px; background: var(--panel); color: var(--text); padding: 0; width: min(560px, calc(100vw - 32px)); }
+  dialog::backdrop { background: rgba(0,0,0,.35); }
+  .dlg-head { padding: 14px 18px; border-bottom: 1px solid var(--border); display: flex; align-items: center; }
+  .dlg-head h3 { margin: 0; font-size: 16px; flex: 1; }
+  .dlg-body { padding: 16px 18px; display: grid; gap: 12px; }
+  .dlg-body label { display: grid; gap: 4px; font-size: 13px; font-weight: 600; }
+  .dlg-body label span { font-weight: 400; color: var(--muted); font-size: 12px; }
+  .two { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  .dlg-foot { padding: 12px 18px; border-top: 1px solid var(--border); display: flex; gap: 8px; justify-content: flex-end; flex-wrap: wrap; }
+  .epic-list { display: grid; gap: 6px; }
+  .epic-list .r { display: flex; gap: 6px; align-items: center; }
+
+  .views button { border: none; background: none; padding: 6px 10px; border-radius: 6px; color: var(--muted); }
+  .views button.on { background: var(--accent-soft); color: var(--accent); font-weight: 600; }
+  .tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; margin-bottom: 14px; }
+  .tile { border: 1px solid var(--border); border-radius: 8px; padding: 10px 12px; }
+  .tile .v { font-size: 24px; font-weight: 650; font-variant-numeric: tabular-nums; }
+  .tile .l { font-size: 12px; color: var(--muted); }
+  .chart { position: relative; }
+  .chart svg { display: block; width: 100%; overflow: visible; }
+  .chart text { font-size: 11px; fill: var(--muted); font-variant-numeric: tabular-nums; }
+  .chart-title { font-size: 13px; font-weight: 600; margin: 4px 0 2px; }
+  .tip { position: absolute; pointer-events: none; background: var(--panel); border: 1px solid var(--border); border-radius: 8px; padding: 7px 10px; font-size: 12px; box-shadow: 0 4px 14px rgba(0,0,0,.12); max-width: 320px; z-index: 2; }
+  .tip b { font-variant-numeric: tabular-nums; }
+  .day-table { min-width: 0; width: auto; }
+  .day-table td, .day-table th { padding: 3px 12px 3px 0; font-variant-numeric: tabular-nums; }
+
+  @media (max-width: 700px) {
+    .topbar, main { padding-left: 16px; padding-right: 16px; }
+    .two, .detail-grid { grid-template-columns: 1fr; }
+  }
+</style>
+</head>
+<body>
+<header class="topbar">
+  <h1>📋 Gestor de tareas</h1>
+  <nav class="views">
+    <button id="viewTasks" class="on" onclick="setView('tasks')">Tareas</button>
+    <button id="viewSprint" onclick="setView('sprint')">📈 Avance del sprint</button>
+  </nav>
+  <span class="status" id="jiraStatus">Conectando con Jira…</span>
+  <span class="spacer"></span>
+  <label class="muted">IA
+    <select id="provider" style="width:auto">
+      <option value="claude_code">Claude (mi cuenta)</option>
+      <option value="claude">Claude (API key)</option>
+      <option value="ollama">Local (Ollama)</option>
+    </select>
+  </label>
+  <button onclick="openConfig()">⚙️ Configuración</button>
+  <button class="primary" id="pushBtn" onclick="pushToJira()">Subir a Jira</button>
+</header>
+
+<main id="sprintView" hidden>
+  <section class="card">
+    <div class="card-head">
+      <h2>Tareas subidas en el sprint</h2>
+      <span class="muted" id="spRange"></span>
+      <span class="spacer"></span>
+      <div class="filters">
+        <select id="spSprint" onchange="loadSprintChart()"></select>
+        <select id="spUser" onchange="renderSprintChart()"></select>
+        <label class="muted" title="Tareas creadas antes del inicio del sprint y movidas a él"><input type="checkbox" id="spPrev" style="width:auto" onchange="renderSprintChart()"> Incluir las creadas antes del sprint</label>
+        <button class="ghost" onclick="loadSprintChart()" title="Recargar desde Jira">↻</button>
+      </div>
+    </div>
+    <div class="card-body" id="spBody"><div class="empty">Cargando…</div></div>
+  </section>
+</main>
+
+<main id="tasksView">
+  <!-- Configuración activa -->
+  <div class="defaults" id="defaultsBar"></div>
+
+  <!-- Nuevo desglose -->
+  <section class="card">
+    <div class="card-head">
+      <h2>Nuevo desglose</h2>
+      <div class="tabs">
+        <button id="tabText" class="on" onclick="setMode('text')">✍️ Escribir</button>
+        <button id="tabFile" onclick="setMode('file')">📄 Subir .txt</button>
+        <button id="tabBulk" onclick="setMode('bulk')">📋 Lista rápida</button>
+      </div>
+    </div>
+    <div class="card-body">
+      <div id="modeText">
+        <textarea id="input" rows="4" placeholder="Escribe lo que hiciste hoy o lo que hay que hacer. Ej.: En META WHATSAPP configuré el webhook y probé las plantillas; en ASISTENTE IA corregí la respuesta vacía del chat. (Ctrl+Enter para desglosar)"></textarea>
+        <div style="display:flex;justify-content:flex-end;margin-top:8px">
+          <button class="primary" id="textBtn" onclick="breakdownText()">Desglosar tareas</button>
+        </div>
+      </div>
+      <div id="modeFile" hidden>
+        <div class="drop" id="drop" onclick="$('fileInput').click()">
+          <input type="file" id="fileInput" multiple accept=".txt,.md,.log,.csv,.json" hidden onchange="pickFiles(this.files)">
+          <div id="dropText">Arrastra aquí tus archivos .txt de memoria / registro de cambios, o haz clic para elegirlos</div>
+        </div>
+        <div style="display:flex;justify-content:flex-end;margin-top:8px">
+          <button class="primary" id="fileBtn" onclick="breakdownFiles()" disabled>Desglosar archivo</button>
+        </div>
+      </div>
+      <div id="modeBulk" hidden>
+        <p class="muted" style="margin:0 0 6px">Una tarea por línea, sin IA. Una línea <code># PROYECTO</code> elige la épica (si existe en Jira se usa esa).
+          Cada tarea queda como <code>PROYECTO - descripción - info</code> con la configuración de arriba.</p>
+        <textarea id="bulkInput" rows="6" placeholder="# META - WHATSAPP&#10;Configurar webhook de mensajes entrantes&#10;Probar plantillas aprobadas - entorno pruebas&#10;# ASISTENTE_IA&#10;Corregir respuesta vacía del chat"></textarea>
+        <div style="display:flex;gap:8px;justify-content:flex-end;align-items:center;margin-top:8px">
+          <label class="muted">Épica por defecto <select id="bulkEpic" style="width:auto"></select></label>
+          <button class="primary" onclick="bulkCreate()">Crear tareas</button>
+        </div>
+      </div>
+      <div id="note"></div>
+    </div>
+  </section>
+
+  <!-- Tareas -->
+  <section class="card">
+    <div class="card-head">
+      <h2>Tareas</h2>
+      <span class="muted" id="totals"></span>
+      <span class="spacer"></span>
+      <div class="filters">
+        <input id="fSearch" placeholder="Buscar…" oninput="renderTasks()" style="width:150px">
+        <select id="fEpic" onchange="renderTasks()"></select>
+        <select id="fUser" onchange="renderTasks()"></select>
+        <select id="fState" onchange="renderTasks()">
+          <option value="">Todas</option><option value="pending">Pendientes de subir</option><option value="jira">Ya en Jira</option>
+        </select>
+        <button onclick="openEpics()">Épicas</button>
+        <button onclick="addTask()">+ Tarea</button>
+      </div>
+    </div>
+    <div id="bulk"></div>
+    <div id="results"></div>
+    <div class="table-wrap" id="tableWrap"></div>
+  </section>
+</main>
+
+<!-- Configuración -->
+<dialog id="cfgDlg">
+  <div class="dlg-head"><h3>⚙️ Configuración de tareas nuevas</h3><button class="ghost" onclick="$('cfgDlg').close()">✕</button></div>
+  <div class="dlg-body">
+    <p class="muted" style="margin:0">Se aplican a cada tarea nueva. Las fechas vacías son automáticas: inicio hoy y fin el último día del mes. Si el texto nombra a otra persona del equipo (p.ej. "Ana hizo…"), la IA se la asigna a ella. Luego puedes cambiar todo en cada tarea.</p>
+    <label>Responsable <select id="cAssignee"></select></label>
+    <label>Sprint <select id="cSprint" onchange="sprintDates()"></select><span id="cSprintHint"></span></label>
+    <div class="two">
+      <label>Fecha de inicio <input type="date" id="cStart"><span id="cStartHint"></span></label>
+      <label>Fecha de finalización <input type="date" id="cDue"><span id="cDueHint"></span></label>
+    </div>
+    <div><button class="ghost" style="color:var(--accent);padding-left:0" onclick="$('cStart').value='';$('cDue').value='';dateHints()">↺ Usar fechas automáticas (hoy → fin de mes)</button></div>
+  </div>
+  <div class="dlg-foot">
+    <button onclick="$('cfgDlg').close()">Cancelar</button>
+    <button onclick="saveConfig(true)" title="Aplica estos valores a las tareas que aún no se han subido a Jira">Guardar y aplicar a pendientes</button>
+    <button class="primary" onclick="saveConfig(false)">Guardar</button>
+  </div>
+</dialog>
+
+<!-- Épicas -->
+<dialog id="epicDlg">
+  <div class="dlg-head"><h3>Épicas</h3><button class="ghost" onclick="$('epicDlg').close()">✕</button></div>
+  <div class="dlg-body"><div class="epic-list" id="epicList"></div>
+    <div style="display:flex;gap:6px"><input id="newEpicName" placeholder="Nombre de la nueva épica"><button onclick="createEpicFromDlg()">+ Añadir</button></div>
+  </div>
+  <div class="dlg-foot"><button class="primary" onclick="$('epicDlg').close()">Listo</button></div>
+</dialog>
+
+<script>
+let cfg = null, ws = null, mode = 'text', pickedFiles = [], saveTimer = null, lastResults = null;
+const selected = new Set(), expanded = new Set();
+const $ = (id) => document.getElementById(id);
+const esc = (s) => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const newId = () => Math.random().toString(16).slice(2, 12);
+const fmtDate = (d) => d ? d.split('-').reverse().join('/') : '';
+const iso = (dt) => `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, '0')}-${String(dt.getDate()).padStart(2, '0')}`;
+const autoStart = () => iso(new Date());                                                   // hoy
+const autoDue = () => { const t = new Date(); return iso(new Date(t.getFullYear(), t.getMonth() + 1, 0)); };  // fin de mes
+// Configuración con las fechas automáticas resueltas (vacío en Configuración = automático)
+const effDefaults = () => ({ ...ws.defaults, start_date: ws.defaults.start_date || autoStart(), due_date: ws.defaults.due_date || autoDue() });
+
+async function api(path, opts = {}) {
+  const isForm = opts.body instanceof FormData;
+  const r = await fetch(path, { ...opts, headers: opts.body && !isForm ? {'Content-Type': 'application/json'} : {} });
+  const data = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error(data.detail || r.statusText);
+  return data;
+}
+
+// ---------- Datos de Jira ----------
+const users = () => cfg?.jira?.users || [];
+const sprints = () => cfg?.jira?.sprints || [];
+const stdTypes = () => { const t = (cfg?.jira?.issue_types || []).filter(t => t.level === 0).map(t => t.name); return t.length ? t : ['Task', 'Story', 'Bug']; };
+const priorities = () => cfg?.jira?.priorities || [];
+const browse = (key) => cfg?.jira ? `${cfg.jira.base_url}/browse/${key}` : '#';
+const POINTS = null;  // los puntos se estiman en Jira; el desglose ya se hace a tamaño de 1 punto
+const norm = (x) => (x || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[\W_]+/g, ' ').trim();
+// Formato "PROYECTO - descripción - info": el primer tramo es el nombre exacto de la épica
+function formatTitle(epicName, title, oldEpicName = null) {
+  let parts = (title || '').split(/\s+-\s+/).map(x => x.trim()).filter(Boolean);
+  for (const name of [oldEpicName, epicName].filter(Boolean)) {
+    for (let k = 1; k <= parts.length; k++) if (norm(parts.slice(0, k).join(' - ')) === norm(name)) { parts = parts.slice(k); break; }
+  }
+  return [epicName.trim(), ...parts].join(' - ');
+}
+const jiraEpics = () => cfg?.jira?.epics || [];
+const allTasks = () => ws.plan.epics.flatMap(e => e.tasks.map(t => ({ t, e })));
+const findTask = (id) => allTasks().find(x => x.t.id === id);
+
+// ---------- Arranque ----------
+async function init() {
+  try { cfg = await api('/api/config'); } catch (e) { cfg = { jira: null, jira_error: e.message }; }
+  const avail = cfg.providers || { claude_code: true, claude: true, ollama: true };
+  for (const o of [...$('provider').options]) if (!avail[o.value]) o.remove();
+  $('provider').querySelector('[value=ollama]').text = `Local (${cfg.ollama_model || 'Ollama'})`;
+  const saved = localStorage.getItem('provider');
+  $('provider').value = avail[saved] ? saved : (avail[cfg.default_provider] ? cfg.default_provider : $('provider').options[0].value);
+  $('provider').onchange = () => localStorage.setItem('provider', $('provider').value);
+  ws = await api('/api/state');
+  renderJiraStatus(); renderAll();
+  try { if (localStorage.getItem('view') === 'sprint') setView('sprint'); } catch {}
+}
+
+function renderJiraStatus() {
+  const j = cfg.jira;
+  $('jiraStatus').innerHTML = j
+    ? `<span class="dot" style="background:var(--ok)"></span>Jira <b>${esc(j.project)}</b> · ${j.users.length} personas · ${j.epics.length} épicas · ${j.sprints.length} sprints <button class="ghost" onclick="refreshJira()" title="Recargar datos de Jira">↻</button>`
+    : `<span class="dot" style="background:var(--err)"></span><span title="${esc(cfg.jira_error)}">Jira no conectado (revisa .env)</span> <button class="ghost" onclick="refreshJira()">↻</button>`;
+}
+async function refreshJira() { cfg = await api('/api/config?refresh=true'); renderJiraStatus(); renderAll(); }
+
+function renderAll() { renderDefaults(); renderFilters(); renderTasks(); }
+
+// ---------- Configuración ----------
+function renderDefaults() {
+  const d = ws.defaults;
+  $('defaultsBar').innerHTML = `<span>Las tareas nuevas se crean con →</span>
+    <span>👤 <b>${esc(d.assignee_name || 'Sin responsable')}</b></span>
+    <span>🏃 <b>${esc(d.sprint_name || 'Sin sprint')}</b></span>
+    <span>📅 <b>${d.start_date ? fmtDate(d.start_date) : `hoy (${fmtDate(autoStart())})`}</b> → <b>${d.due_date ? fmtDate(d.due_date) : `fin de mes (${fmtDate(autoDue())})`}</b></span>
+    <button class="ghost" style="color:var(--accent)" onclick="openConfig()">Cambiar</button>`;
+}
+function userOptions(selectedId, empty = '— Sin responsable —', selectedName = null) {
+  const missing = selectedId && !users().some(u => u.accountId === selectedId);
+  return `<option value="">${empty}</option>` + (missing ? `<option value="${esc(selectedId)}" selected>${cfg?.jira ? '⚠ ' : ''}${esc(selectedName || 'Responsable guardado')}${cfg?.jira ? ' (no está en Jira)' : ''}</option>` : '') + users().map(u => `<option value="${u.accountId}" ${u.accountId === selectedId ? 'selected' : ''}>${esc(u.displayName)}</option>`).join('');
+}
+function sprintOptions(selectedId, empty = '— Sin sprint —', selectedName = null) {
+  const missing = selectedId && !sprints().some(s => s.id === selectedId);
+  return `<option value="">${empty}</option>` + (missing ? `<option value="${selectedId}" selected>${cfg?.jira ? '⚠ ' : ''}${esc(selectedName || 'Sprint ' + selectedId)}${cfg?.jira ? ' (no existe o está cerrado)' : ''}</option>` : '') + sprints().map(s => `<option value="${s.id}" ${s.id === selectedId ? 'selected' : ''}>${esc(s.name)}${s.state === 'active' ? ' (activo)' : ''}</option>`).join('');
+}
+function openConfig() {
+  const d = ws.defaults;
+  $('cAssignee').innerHTML = userOptions(d.assignee_id, undefined, d.assignee_name);
+  $('cSprint').innerHTML = sprintOptions(d.sprint_id, undefined, d.sprint_name);
+  $('cStart').value = d.start_date || ''; $('cDue').value = d.due_date || ''; dateHints();
+  $('cStart').oninput = $('cDue').oninput = dateHints;
+  $('cSprintHint').textContent = cfg.jira ? (sprints().length ? '' : 'El proyecto no tiene sprints activos o futuros (¿tablero kanban?)') : 'Conecta Jira para ver el equipo y los sprints';
+  $('cfgDlg').showModal();
+}
+function dateHints() {
+  $('cStartHint').textContent = $('cStart').value ? 'Fecha fija' : `Vacío = automático: hoy (${fmtDate(autoStart())})`;
+  $('cDueHint').textContent = $('cDue').value ? 'Fecha fija' : `Vacío = automático: último día del mes (${fmtDate(autoDue())})`;
+}
+function sprintDates() {
+  const s = sprints().find(s => s.id === Number($('cSprint').value));
+  $('cSprintHint').textContent = s?.startDate ? `Sprint: ${fmtDate(s.startDate)} → ${fmtDate(s.endDate)}` : '';
+}
+function readConfig() {
+  const d = ws.defaults, a = $('cAssignee').value, sp = Number($('cSprint').value) || null;
+  const u = users().find(u => u.accountId === a) || (a && a === d.assignee_id ? { accountId: a, displayName: d.assignee_name } : null);
+  const s = sprints().find(s => s.id === sp) || (sp && sp === d.sprint_id ? { id: sp, name: d.sprint_name } : null);
+  return { assignee_id: u?.accountId || null, assignee_name: u?.displayName || null,
+           sprint_id: s?.id || null, sprint_name: s?.name || null,
+           start_date: $('cStart').value || null, due_date: $('cDue').value || null };
+}
+async function saveConfig(applyToPending) {
+  const d = readConfig();
+  if (d.start_date && d.due_date && d.start_date > d.due_date) return alert('La fecha de inicio es posterior a la de finalización.');
+  ws.defaults = (await api('/api/defaults', { method: 'PUT', body: JSON.stringify(d) })).defaults;
+  if (applyToPending) {
+    const pend = allTasks().filter(x => !x.t.jira_key);
+    if (pend.length && confirm(`¿Aplicar responsable, sprint y fechas a ${pend.length} tareas pendientes de subir?`)) {
+      const eff = { ...d, start_date: d.start_date || autoStart(), due_date: d.due_date || autoDue() };
+      pend.forEach(({ t }) => Object.assign(t, eff));
+      saveTimer = 1; await flushSave();
+    }
+  }
+  $('cfgDlg').close(); renderAll();
+}
+
+// ---------- Nuevo desglose ----------
+function setMode(m) {
+  mode = m;
+  for (const [k, box, tab] of [['text', 'modeText', 'tabText'], ['file', 'modeFile', 'tabFile'], ['bulk', 'modeBulk', 'tabBulk']]) {
+    $(box).hidden = m !== k; $(tab).classList.toggle('on', m === k);
+  }
+  if (m === 'bulk') $('bulkEpic').innerHTML = epicOptions(null, { withNew: true });
+}
+function bulkCreate() {
+  const lines = $('bulkInput').value.split('\n').map(l => l.trim()).filter(Boolean);
+  if (!lines.length) return $('bulkInput').focus();
+  let epic = $('bulkEpic').value === '__new' ? null : resolveEpic($('bulkEpic').value);
+  if (!epic) { const n = prompt('Nombre de la épica para estas tareas', 'General'); if (!n?.trim()) return; epic = createEpic(n); }
+  const d = effDefaults(); let n = 0;
+  for (const line of lines) {
+    if (line.startsWith('#')) {
+      const name = line.replace(/^#+/, '').trim();
+      if (name) epic = createEpic(name);
+      continue;
+    }
+    const [title, pts] = line.replace(/^[-*•]\s*/, '').split('|').map(x => x.trim());
+    if (!title) continue;
+    epic.tasks.push({ id: newId(), summary: formatTitle(epic.summary, title), description: '', issue_type: stdTypes()[0], story_points: pts && !isNaN(pts) ? Number(pts) : POINTS,
+      assignee_id: d.assignee_id, assignee_name: d.assignee_name, sprint_id: d.sprint_id, sprint_name: d.sprint_name,
+      start_date: d.start_date, due_date: d.due_date, priority: null, labels: [], jira_key: null });
+    n++;
+  }
+  $('bulkInput').value = ''; queueSave(); renderAll(); setMode('bulk');
+  showNote(`✅ ${n} tareas creadas.`);
+}
+function pickFiles(files) {
+  pickedFiles = [...files].filter(f => /\.(txt|md|log|csv|json)$/i.test(f.name));
+  $('dropText').innerHTML = pickedFiles.length ? pickedFiles.map(f => `📄 <b>${esc(f.name)}</b> <span class="muted">(${Math.ceil(f.size/1024)} KB)</span>`).join('<br>') + '<br><span class="muted">clic para cambiar</span>'
+    : 'Arrastra aquí tus archivos .txt de memoria / registro de cambios, o haz clic para elegirlos';
+  $('fileBtn').disabled = !pickedFiles.length;
+  $('fileBtn').textContent = pickedFiles.length > 1 ? `Desglosar ${pickedFiles.length} archivos` : 'Desglosar archivo';
+}
+const drop = $('drop');
+['dragenter', 'dragover'].forEach(ev => drop.addEventListener(ev, e => { e.preventDefault(); drop.classList.add('over'); }));
+['dragleave', 'drop'].forEach(ev => drop.addEventListener(ev, e => { e.preventDefault(); drop.classList.remove('over'); }));
+drop.addEventListener('drop', e => pickFiles(e.dataTransfer.files));
+
+function setBusy(b, label = 'Desglosando…') {
+  $('textBtn').disabled = b; $('pushBtn').disabled = b; $('fileBtn').disabled = b || !pickedFiles.length;
+  if (b) $('note').innerHTML = `<div class="note" style="background:var(--accent-soft)"><span class="spinner"></span> ${label}</div>`;
+}
+function showNote(text, isErr = false) { $('note').innerHTML = `<div class="note ${isErr ? 'err' : ''}">${esc(text)}</div>`; }
+
+async function breakdownText() {
+  const text = $('input').value.trim(); if (!text) return $('input').focus();
+  await flushSave(); setBusy(true);
+  try {
+    const r = await api('/api/breakdown/text', { method: 'POST', body: JSON.stringify({ text, provider: $('provider').value }) });
+    ws = r.workspace; renderAll(); $('input').value = '';
+    setBusy(false); showNote(`✅ ${r.added} tareas nuevas añadidas${r.skipped ? ` (${r.skipped} repetidas omitidas)` : ''}. ${r.note}`);
+  } catch (e) { setBusy(false); showNote('Error: ' + e.message, true); }
+}
+async function breakdownFiles() {
+  await flushSave();
+  let total = 0, skipped = 0; const notes = [];
+  for (const [i, f] of pickedFiles.entries()) {
+    setBusy(true, `Desglosando ${esc(f.name)} (${i + 1}/${pickedFiles.length})…`);
+    const fd = new FormData(); fd.append('file', f); fd.append('provider', $('provider').value);
+    try { const r = await api('/api/breakdown/file', { method: 'POST', body: fd }); ws = r.workspace; total += r.added; skipped += r.skipped; notes.push(`${f.name}: ${r.note}`); renderAll(); }
+    catch (e) { setBusy(false); showNote(`Error en ${f.name}: ${e.message}`, true); return; }
+  }
+  pickFiles([]); $('fileInput').value = '';
+  setBusy(false); showNote(`✅ ${total} tareas nuevas añadidas${skipped ? ` (${skipped} repetidas omitidas)` : ''}. ${notes.join(' · ')}`);
+}
+$('input').addEventListener('keydown', e => { if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) breakdownText(); });
+
+// ---------- Lista de tareas ----------
+function renderFilters() {
+  const keep = (id, html) => { const v = $(id).value; $(id).innerHTML = html; $(id).value = [...$(id).options].some(o => o.value === v) ? v : ''; };
+  keep('fEpic', '<option value="">Todas las épicas</option>' + ws.plan.epics.filter(e => e.tasks.length || !e.linked).map(e => `<option value="${e.id}">${esc((e.jira_key ? e.jira_key + ' · ' : '') + e.summary)}</option>`).join(''));
+  const names = [...new Set(allTasks().map(x => x.t.assignee_name).filter(Boolean))].sort();
+  keep('fUser', '<option value="">Todas las personas</option><option value="__none">Sin responsable</option>' + names.map(n => `<option>${esc(n)}</option>`).join(''));
+}
+
+function visibleTasks() {
+  const q = $('fSearch').value.trim().toLowerCase(), fe = $('fEpic').value, fu = $('fUser').value, fs = $('fState').value;
+  return allTasks().filter(({ t, e }) =>
+    (!fe || e.id === fe) &&
+    (!fu || (fu === '__none' ? !t.assignee_name : t.assignee_name === fu)) &&
+    (!fs || (fs === 'jira' ? !!t.jira_key : !t.jira_key)) &&
+    (!q || (t.summary + ' ' + t.description).toLowerCase().includes(q)));
+}
+
+function renderTotals() {
+  const all = allTasks(), vis = visibleTasks();
+  const pts = vis.reduce((a, { t }) => a + (Number(t.story_points) || 0), 0);
+  const pending = all.filter(x => !x.t.jira_key).length;
+  $('totals').textContent = all.length ? `${vis.length} de ${all.length} · ${pts} pts · ${pending} pendientes de subir` : '';
+  $('pushBtn').textContent = pending ? `Subir a Jira (${pending})` : 'Subir a Jira';
+}
+
+function renderTasks() {
+  const all = allTasks(), vis = visibleTasks();
+  for (const id of [...selected]) if (!findTask(id)) selected.delete(id);
+  renderTotals(); renderBulk(); renderResults();
+
+  if (!all.length) { $('tableWrap').innerHTML = '<div class="empty">Aún no hay tareas. Escribe lo que hiciste o sube un .txt arriba y pulsa <b>Desglosar</b>.</div>'; return; }
+  if (!vis.length) { $('tableWrap').innerHTML = '<div class="empty">Ninguna tarea coincide con los filtros.</div>'; return; }
+
+  const allSel = vis.every(({ t }) => selected.has(t.id));
+  let html = `<table><thead><tr>
+      <th style="width:30px"><input type="checkbox" ${allSel ? 'checked' : ''} onchange="selectAll(this.checked)" title="Seleccionar todas"></th>
+      <th class="col-title">Tarea</th><th>Épica</th><th>Responsable</th><th>Sprint</th>
+      <th>Inicio</th><th>Fin</th><th>Pts</th><th>Jira</th><th></th></tr></thead><tbody>`;
+  for (const { t, e } of vis) {
+    const warnUser = t.assignee_name && !t.assignee_id;
+    html += `<tr class="${selected.has(t.id) ? 'sel' : ''}">
+      <td><input type="checkbox" ${selected.has(t.id) ? 'checked' : ''} onchange="toggleSel('${t.id}', this.checked)"></td>
+      <td class="col-title"><div style="display:flex;gap:4px;align-items:center">
+        <button class="ghost" onclick="toggleDetail('${t.id}')" title="Descripción y más campos">${expanded.has(t.id) ? '▾' : '▸'}</button>
+        <input class="cell-input" value="${esc(t.summary)}" placeholder="Título de la tarea" oninput="setField('${t.id}','summary',this.value)"></div></td>
+      <td class="col-epic"><select class="cell-input" onchange="changeEpic('${t.id}', this.value)">
+        ${epicOptions(e.id, { withNew: true })}</select></td>
+      <td class="col-user"><select class="cell-input" onchange="setAssignee('${t.id}', this.value)" ${warnUser ? 'style="color:var(--warn)"' : ''}>
+        ${warnUser ? `<option value="" selected>⚠ ${esc(t.assignee_name)} (no está en Jira)</option>` : ''}${warnUser ? userOptions(null) : userOptions(t.assignee_id, undefined, t.assignee_name)}</select></td>
+      <td class="col-sprint"><select class="cell-input" onchange="setSprint('${t.id}', this.value)">${sprintOptions(t.sprint_id, undefined, t.sprint_name)}</select></td>
+      <td class="date"><input class="cell-input" type="date" value="${t.start_date || ''}" onchange="setDate('${t.id}','start_date',this)"></td>
+      <td class="date"><input class="cell-input" type="date" value="${t.due_date || ''}" onchange="setDate('${t.id}','due_date',this)"></td>
+      <td class="num"><input class="cell-input" type="number" min="0" step="0.5" value="${t.story_points ?? ''}" oninput="setField('${t.id}','story_points',this.value)"></td>
+      <td>${t.jira_key ? `<a class="key" target="_blank" href="${browse(t.jira_key)}">${esc(t.jira_key)}</a>` : '<span class="pending">pendiente</span>'}</td>
+      <td><button class="ghost" title="Eliminar tarea" onclick="deleteTasks(['${t.id}'])">🗑</button></td></tr>`;
+    if (expanded.has(t.id)) html += `<tr class="detail"><td colspan="10"><div class="detail-grid">
+        <label>Descripción<textarea rows="5" oninput="setField('${t.id}','description',this.value)">${esc(t.description)}</textarea></label>
+        <div style="display:grid;gap:8px;align-content:start">
+          <label>Tipo<select onchange="setField('${t.id}','issue_type',this.value)">${[...new Set([...stdTypes(), t.issue_type].filter(Boolean))].map(v => `<option ${v === t.issue_type ? 'selected' : ''}>${esc(v)}</option>`).join('')}</select></label>
+          <label>Prioridad<select onchange="setField('${t.id}','priority',this.value)"><option value="">— Por defecto —</option>${[...new Set([...priorities(), t.priority].filter(Boolean))].map(v => `<option ${v === t.priority ? 'selected' : ''}>${esc(v)}</option>`).join('')}</select></label>
+          <label>Etiquetas<input value="${esc(t.labels.join(', '))}" placeholder="separadas por coma" oninput="setField('${t.id}','labels',this.value)"></label>
+        </div></div></td></tr>`;
+  }
+  $('tableWrap').innerHTML = html + '</tbody></table>';
+}
+
+function renderBulk() {
+  const n = selected.size;
+  $('bulk').innerHTML = !n ? '' : `<div class="bulk"><b>${n} seleccionadas</b>
+    <select id="bUser">${userOptions(null, 'Responsable…')}</select>
+    <select id="bSprint">${sprintOptions(null, 'Sprint…')}</select>
+    <label class="muted">Inicio <input type="date" id="bStart"></label>
+    <label class="muted">Fin <input type="date" id="bDue"></label>
+    <select id="bEpic">${epicOptions(null, { placeholder: 'Mover a épica…' })}</select>
+    <button onclick="applyBulk()">Aplicar</button>
+    <button class="primary" onclick="pushToJira([...selected])">Subir seleccionadas</button>
+    <button class="danger" onclick="deleteTasks([...selected])">Eliminar</button>
+    <button class="ghost" onclick="selected.clear();renderTasks()">✕</button></div>`;
+}
+
+function renderResults() {
+  if (!lastResults) { $('results').innerHTML = ''; return; }
+  const ok = lastResults.filter(r => r.ok).length, bad = lastResults.length - ok;
+  $('results').innerHTML = `<div style="padding:10px 14px;border-bottom:1px solid var(--border)"><b>Resultado de la subida:</b>
+    <span class="ok">${ok} correctas</span>${bad ? `, <span class="err">${bad} con error</span>` : ''}
+    <button class="ghost" onclick="lastResults=null;renderResults()">✕</button>
+    <ul class="results">${lastResults.map(r => `<li>${r.ok ? '✅' : '❌'} ${r.kind === 'epic' ? '<b>Épica</b> ' : ''}${r.key ? `<a target="_blank" href="${r.url}">${esc(r.key)}</a>` : ''}
+      ${esc(r.summary)} <span class="muted">${r.ok ? (r.created ? 'creada' : 'actualizada') : ''}</span>
+      ${r.error ? `<div class="err">${esc(r.error)}</div>` : ''}${r.warnings.map(w => `<div class="warn">${esc(w)}</div>`).join('')}</li>`).join('')}</ul></div>`;
+}
+
+// ---------- Edición ----------
+function setField(id, f, v) {
+  const { t } = findTask(id);
+  t[f] = f === 'labels' ? v.split(',').map(s => s.trim()).filter(Boolean)
+       : f === 'story_points' ? (v === '' ? null : Number(v))
+       : f === 'priority' ? (v || null) : v;
+  queueSave();
+  if (f === 'story_points') renderTotals();
+}
+function setAssignee(id, accountId) {
+  const { t } = findTask(id), u = users().find(u => u.accountId === accountId);
+  if (!u && accountId && accountId === t.assignee_id) return;  // se mantiene el guardado
+  t.assignee_id = u?.accountId || null; t.assignee_name = u?.displayName || null; queueSave(); renderFilters();
+}
+function setSprint(id, sprintId) {
+  const { t } = findTask(id), s = sprints().find(s => s.id === Number(sprintId));
+  if (!s && sprintId && Number(sprintId) === t.sprint_id) return;
+  t.sprint_id = s?.id || null; t.sprint_name = s?.name || null; queueSave();
+}
+function setDate(id, f, el) {
+  const { t } = findTask(id); t[f] = el.value || null;
+  el.style.color = t.start_date && t.due_date && t.start_date > t.due_date ? 'var(--err)' : '';
+  queueSave();
+}
+function createEpic(name) {
+  // Si ya existe en Jira (o en la lista) una épica con ese nombre, se reutiliza
+  const n = name.trim(), low = n.toLowerCase();
+  const inPlan = ws.plan.epics.find(e => e.summary.trim().toLowerCase() === low);
+  if (inPlan) return inPlan;
+  const je = jiraEpics().find(j => j.summary.trim().toLowerCase() === low);
+  if (je) return resolveEpic('jira:' + je.key);
+  const e = { id: newId(), summary: n, description: '', labels: [], tasks: [], jira_key: null, linked: false };
+  ws.plan.epics.push(e); return e;
+}
+// value = id de épica del plan o "jira:CLAVE" de una épica existente en Jira
+function resolveEpic(value) {
+  if (!value?.startsWith('jira:')) return ws.plan.epics.find(e => e.id === value);
+  const key = value.slice(5);
+  let e = ws.plan.epics.find(e => e.jira_key === key);
+  if (!e) {
+    const je = jiraEpics().find(j => j.key === key);
+    e = { id: newId(), summary: je?.summary || key, description: '', labels: [], tasks: [], jira_key: key, linked: true };
+    ws.plan.epics.push(e);
+  }
+  return e;
+}
+// <option>s de épica agrupadas: existentes en Jira y nuevas (se crean al subir)
+function epicOptions(currentId, { withNew = false, placeholder = null } = {}) {
+  const inJira = new Map();
+  for (const je of jiraEpics()) inJira.set(je.key, { value: 'jira:' + je.key, label: `${je.key} · ${je.summary}` });
+  for (const e of ws.plan.epics) if (e.jira_key) inJira.set(e.jira_key, { value: e.id, label: `${e.jira_key} · ${e.summary}` });
+  const fresh = ws.plan.epics.filter(e => !e.jira_key);
+  const opt = o => `<option value="${esc(o.value)}" ${o.value === currentId ? 'selected' : ''}>${esc(o.label)}</option>`;
+  return (placeholder ? `<option value="">${esc(placeholder)}</option>` : '') +
+    (inJira.size ? `<optgroup label="En Jira">${[...inJira.values()].map(opt).join('')}</optgroup>` : '') +
+    (fresh.length ? `<optgroup label="Nuevas (se crean al subir)">${fresh.map(e => opt({ value: e.id, label: e.summary })).join('')}</optgroup>` : '') +
+    (withNew ? '<option value="__new">➕ Nueva épica…</option>' : '');
+}
+function moveTask(id, epicId) {
+  const { t, e } = findTask(id), target = resolveEpic(epicId);
+  if (!target || target === e) return;
+  e.tasks.splice(e.tasks.indexOf(t), 1); target.tasks.push(t);
+  t.summary = formatTitle(target.summary, t.summary, e.summary);
+}
+function changeEpic(id, value) {
+  if (value === '__new') {
+    const name = prompt('Nombre de la nueva épica'); if (!name?.trim()) return renderTasks();
+    value = createEpic(name).id;
+  }
+  moveTask(id, value); queueSave(); renderAll();
+}
+function addTask() {
+  const epic = ws.plan.epics.find(e => e.id === $('fEpic').value) || ws.plan.epics.find(e => !e.linked) || ws.plan.epics[0] || createEpic('General');
+  const d = effDefaults(), t = { id: newId(), summary: epic.summary + ' - ', description: '', issue_type: stdTypes()[0], story_points: POINTS,
+    assignee_id: d.assignee_id, assignee_name: d.assignee_name, sprint_id: d.sprint_id, sprint_name: d.sprint_name,
+    start_date: d.start_date, due_date: d.due_date, priority: null, labels: [], jira_key: null };
+  epic.tasks.unshift(t); queueSave(); renderAll();
+  document.querySelector('#tableWrap tbody tr .col-title input')?.focus();
+}
+function deleteTasks(ids) {
+  const inJira = ids.filter(id => findTask(id)?.t.jira_key).length;
+  if (!confirm(`¿Eliminar ${ids.length} tarea(s) de la lista?${inJira ? `\n${inJira} ya están en Jira: allí NO se borran.` : ''}`)) return;
+  for (const id of ids) { const x = findTask(id); if (x) x.e.tasks.splice(x.e.tasks.indexOf(x.t), 1); selected.delete(id); }
+  queueSave(); renderAll();
+}
+function toggleSel(id, on) { on ? selected.add(id) : selected.delete(id); renderTasks(); }
+function selectAll(on) { visibleTasks().forEach(({ t }) => on ? selected.add(t.id) : selected.delete(t.id)); renderTasks(); }
+function toggleDetail(id) { expanded.has(id) ? expanded.delete(id) : expanded.add(id); renderTasks(); }
+function applyBulk() {
+  const u = users().find(u => u.accountId === $('bUser').value), s = sprints().find(s => s.id === Number($('bSprint').value));
+  const start = $('bStart').value, due = $('bDue').value, epicId = $('bEpic').value;
+  if (!u && !s && !start && !due && !epicId) return alert('Elige al menos un valor para aplicar.');
+  for (const id of selected) {
+    const { t } = findTask(id);
+    if (u) Object.assign(t, { assignee_id: u.accountId, assignee_name: u.displayName });
+    if (s) Object.assign(t, { sprint_id: s.id, sprint_name: s.name });
+    if (start) t.start_date = start;
+    if (due) t.due_date = due;
+    if (epicId) moveTask(id, epicId);
+  }
+  queueSave(); renderAll();
+}
+
+// ---------- Épicas ----------
+function openEpics() { renderEpicList(); $('epicDlg').showModal(); }
+function renderEpicList() {
+  const inPlan = new Set(ws.plan.epics.map(e => e.jira_key).filter(Boolean));
+  const jiraOnly = jiraEpics().filter(j => !inPlan.has(j.key));
+  $('epicList').innerHTML = ws.plan.epics.map((e, i) => e.linked ? `<div class="r">
+      <input value="${esc(e.summary)}" disabled title="Épica existente en Jira (no se modifica)">
+      <span class="muted" style="white-space:nowrap">${e.tasks.length} tareas</span>
+      <a class="key" target="_blank" href="${browse(e.jira_key)}">${esc(e.jira_key)}</a></div>` : `<div class="r">
+      <input value="${esc(e.summary)}" oninput="ws.plan.epics[${i}].summary=this.value;queueSave()">
+      <span class="muted" style="white-space:nowrap">${e.tasks.length} tareas</span>
+      ${e.jira_key ? `<a class="key" target="_blank" href="${browse(e.jira_key)}">${esc(e.jira_key)}</a>` : ''}
+      <button class="ghost" title="${e.tasks.length ? 'Mueve o borra antes sus tareas' : 'Eliminar épica'}" ${e.tasks.length ? 'disabled' : ''} onclick="ws.plan.epics.splice(${i},1);queueSave();renderEpicList()">🗑</button></div>`).join('')
+    || '<p class="muted">No hay épicas con tareas todavía.</p>';
+  if (jiraOnly.length) $('epicList').innerHTML += `<p class="muted" style="margin:8px 0 0">Otras épicas abiertas en Jira (elígelas en la columna Épica de cada tarea):</p>` +
+    jiraOnly.map(j => `<div class="r"><a class="key" target="_blank" href="${browse(j.key)}">${esc(j.key)}</a> ${esc(j.summary)} <span class="muted">${esc(j.status)}</span></div>`).join('');
+  else if (!cfg?.jira) $('epicList').innerHTML += '<p class="muted" style="margin:8px 0 0">Conecta Jira para ver aquí las épicas existentes del proyecto.</p>';
+}
+function createEpicFromDlg() { const n = $('newEpicName').value; if (!n.trim()) return; createEpic(n); $('newEpicName').value = ''; queueSave(); renderEpicList(); }
+$('epicDlg').addEventListener('close', () => renderAll());
+
+// ---------- Guardado y Jira ----------
+function queueSave() { clearTimeout(saveTimer); saveTimer = setTimeout(flushSave, 500); }
+async function flushSave() {
+  if (!saveTimer) return; clearTimeout(saveTimer); saveTimer = null;
+  ws.plan.epics = ws.plan.epics.filter(e => !(e.linked && !e.tasks.length));
+  try { await api('/api/plan', { method: 'PUT', body: JSON.stringify(ws.plan) }); }
+  catch (e) { showNote('No se pudieron guardar los cambios: ' + e.message, true); }
+}
+
+async function pushToJira(onlyIds) {
+  if (!cfg?.jira) return alert('Jira no está conectado. Revisa el archivo .env y pulsa ↻.');
+  const tasks = allTasks().filter(x => !onlyIds || onlyIds.includes(x.t.id)).map(x => x.t);
+  if (!tasks.length) return alert('No hay tareas que subir.');
+  const nNew = tasks.filter(t => !t.jira_key).length, nUpd = tasks.length - nNew;
+  const noUser = tasks.filter(t => !t.assignee_id).length, empty = tasks.filter(t => !t.summary.trim()).length;
+  if (empty) return alert(`${empty} tarea(s) no tienen título.`);
+  if (!confirm(`Proyecto ${cfg.jira.project}:\n• ${nNew} tareas nuevas\n• ${nUpd} ya existentes se actualizarán${noUser ? `\n• ${noUser} sin responsable` : ''}\n\n¿Subir a Jira?`)) return;
+  await flushSave();
+  $('pushBtn').disabled = true; $('pushBtn').innerHTML = '<span class="spinner"></span> Subiendo…';
+  try {
+    const r = await api('/api/push', { method: 'POST', body: JSON.stringify({ plan: ws.plan, only_ids: onlyIds || null }) });
+    ws = r.workspace; lastResults = r.results; selected.clear(); renderAll();
+  } catch (e) { alert('Error de Jira: ' + e.message); }
+  finally { $('pushBtn').disabled = false; renderTotals(); }
+}
+
+// ---------- Avance del sprint ----------
+let spData = null;
+const DAY = 86400000;
+const parseDay = (d) => { const [y, m, dd] = d.split('-').map(Number); return new Date(y, m - 1, dd); };
+const isWeekend = (dt) => dt.getDay() === 0 || dt.getDay() === 6;
+const WD = ['dom', 'lun', 'mar', 'mié', 'jue', 'vie', 'sáb'];
+
+function setView(v) {
+  $('tasksView').hidden = v !== 'tasks'; $('sprintView').hidden = v !== 'sprint';
+  $('viewTasks').classList.toggle('on', v === 'tasks'); $('viewSprint').classList.toggle('on', v === 'sprint');
+  try { localStorage.setItem('view', v); } catch {}
+  if (v === 'sprint') {
+    const cur = Number($('spSprint').value);
+    $('spSprint').innerHTML = sprints().map(s => `<option value="${s.id}">${esc(s.name)}${s.state === 'active' ? ' (activo)' : ''}</option>`).join('');
+    if (sprints().some(s => s.id === cur)) $('spSprint').value = cur;
+    else if (ws.defaults.sprint_id && sprints().some(s => s.id === ws.defaults.sprint_id)) $('spSprint').value = ws.defaults.sprint_id;
+    if (!spData || spData.sprint.id !== Number($('spSprint').value)) loadSprintChart(); else renderSprintChart();
+  }
+}
+
+async function loadSprintChart() {
+  if (!cfg?.jira) return $('spBody').innerHTML = '<div class="empty">Conecta Jira para ver el avance del sprint.</div>';
+  const id = Number($('spSprint').value);
+  if (!id) return $('spBody').innerHTML = '<div class="empty">El proyecto no tiene sprints activos o futuros.</div>';
+  $('spBody').innerHTML = '<div class="empty"><span class="spinner"></span> Leyendo el sprint de Jira…</div>';
+  try { spData = await api(`/api/sprint/${id}/issues`); }
+  catch (e) { spData = null; return $('spBody').innerHTML = `<div class="note err">${esc(e.message)}</div>`; }
+  const v = $('spUser').value, names = [...new Set(spData.issues.map(i => i.assignee).filter(Boolean))].sort();
+  $('spUser').innerHTML = '<option value="">Todo el equipo</option><option value="__none">Sin responsable</option>' + names.map(n => `<option>${esc(n)}</option>`).join('');
+  $('spUser').value = [...$('spUser').options].some(o => o.value === v) ? v : '';
+  renderSprintChart();
+}
+
+// Días hábiles del sprint; lo creado en fin de semana cuenta el lunes siguiente
+function sprintDays(sprint, issues, includePrev) {
+  const start = parseDay(sprint.startDate), end = parseDay(sprint.endDate || sprint.startDate);
+  const today = parseDay(autoStart()), last = sprint.completeDate ? parseDay(sprint.completeDate) : today;
+  const days = [];
+  for (let d = new Date(start); d <= end; d = new Date(d.getTime() + DAY + 3600000)) {
+    d.setHours(0, 0, 0, 0);
+    if (!isWeekend(d)) days.push({ date: iso(d), dt: new Date(d), items: [], future: d > last, weekBreak: days.length > 0 && d.getDay() === 1 });
+  }
+  const prev = [];
+  for (const i of issues) {
+    if (!i.created) continue;
+    if (i.created < sprint.startDate) { prev.push(i); continue; }
+    const target = days.find(d => d.date >= i.created) || days[days.length - 1];
+    target?.items.push(i);
+  }
+  let total = includePrev ? prev.length : 0;
+  for (const d of days) { total += d.items.length; d.total = d.future ? null : total; }
+  return { days, prev };
+}
+
+function renderSprintChart() {
+  if (!spData) return;
+  const { sprint } = spData, fu = $('spUser').value, includePrev = $('spPrev').checked;
+  $('spRange').textContent = sprint.startDate ? `${fmtDate(sprint.startDate)} → ${fmtDate(sprint.endDate)} · sin fines de semana` : '';
+  if (!sprint.startDate) return $('spBody').innerHTML = '<div class="empty">Este sprint aún no ha empezado.</div>';
+  const issues = spData.issues.filter(i => !fu || (fu === '__none' ? !i.assignee : i.assignee === fu));
+  const { days, prev } = sprintDays(sprint, issues, includePrev);
+  const past = days.filter(d => !d.future), inSprint = past.reduce((a, d) => a + d.items.length, 0);
+  const total = past.length ? past[past.length - 1].total : 0;
+  const best = past.reduce((b, d) => d.items.length > (b?.items.length ?? -1) ? d : b, null);
+  $('spBody').innerHTML = `
+    <div class="tiles">
+      <div class="tile"><div class="v">${total}</div><div class="l">tareas ${includePrev ? 'en el sprint' : 'subidas durante el sprint'}</div></div>
+      <div class="tile"><div class="v">${past.length} / ${days.length}</div><div class="l">días hábiles transcurridos</div></div>
+      <div class="tile"><div class="v">${past.length ? (inSprint / past.length).toFixed(1).replace('.', ',') : '0'}</div><div class="l">tareas por día hábil</div></div>
+      <div class="tile"><div class="v">${prev.length}</div><div class="l">creadas antes del sprint ${includePrev ? '(incluidas)' : '(no incluidas)'}</div></div>
+    </div>
+    <div class="chart-title">Acumulado de tareas</div>
+    <div class="chart" id="spLine"></div>
+    <div class="chart-title" style="margin-top:14px">Tareas subidas por día${best?.items.length ? ` <span class="muted">· máximo ${best.items.length} el ${WD[best.dt.getDay()]} ${fmtDate(best.date)}</span>` : ''}</div>
+    <div class="chart" id="spBars"></div>
+    <p class="muted" style="margin:10px 0 0">Solo días de lunes a viernes; la línea discontinua marca el corte del fin de semana. Lo subido en sábado o domingo cuenta el lunes siguiente.</p>
+    <details style="margin-top:10px"><summary class="muted" style="cursor:pointer">Ver tabla por día</summary>
+      <table class="day-table"><tr><th>Día</th><th>Subidas</th><th>Acumulado</th></tr>
+      ${past.map(d => `<tr><td>${WD[d.dt.getDay()]} ${fmtDate(d.date)}</td><td>${d.items.length}</td><td>${d.total}</td></tr>`).join('')}</table>
+    </details>`;
+  drawSprintChart('spLine', days, 'line', includePrev ? prev.length : 0);
+  drawSprintChart('spBars', days, 'bars');
+}
+
+function drawSprintChart(boxId, days, kind, base = 0) {
+  const box = $(boxId), W = Math.max(box.clientWidth, 300), H = kind === 'line' ? 240 : 150;
+  const m = { t: 12, r: 16, b: 34, l: 36 };
+  const breaks = days.filter(d => d.weekBreak).length, gap = 14;
+  const colW = (W - m.l - m.r - breaks * gap) / days.length;
+  let off = 0; const xs = days.map(d => { if (d.weekBreak) off += gap; return m.l + off; });
+  days.forEach((d, i) => { xs[i] += i * colW + colW / 2; });
+  const vals = days.map(d => kind === 'line' ? d.total : (d.future ? null : d.items.length));
+  const max = Math.max(1, ...vals.filter(v => v != null));
+  const step = [1, 2, 5, 10, 20, 25, 50, 100, 200, 500].find(s => max / s <= 5) || Math.ceil(max / 5);
+  const top = Math.ceil(max / step) * step, y = (v) => m.t + (H - m.t - m.b) * (1 - v / top), y0 = y(0);
+  let g = '';
+  for (let v = 0; v <= top; v += step)
+    g += `<line x1="${m.l}" x2="${W - m.r}" y1="${y(v)}" y2="${y(v)}" stroke="var(--border)" stroke-width="1"/><text x="${m.l - 6}" y="${y(v) + 4}" text-anchor="end">${v}</text>`;
+  days.forEach((d, i) => {
+    if (d.weekBreak) { const bx = xs[i] - colW / 2 - gap / 2; g += `<line x1="${bx}" x2="${bx}" y1="${m.t}" y2="${y0}" stroke="var(--muted)" stroke-width="1" stroke-dasharray="3 3" opacity=".6"><title>Fin de semana</title></line>`; }
+    const every = Math.ceil(days.length / Math.max(1, Math.floor((W - m.l - m.r) / 46)));
+    if (i % every === 0 || i === days.length - 1)
+      g += `<text x="${xs[i]}" y="${H - m.b + 15}" text-anchor="middle">${WD[d.dt.getDay()]}</text><text x="${xs[i]}" y="${H - m.b + 28}" text-anchor="middle">${d.date.slice(8)}/${d.date.slice(5, 7)}</text>`;
+  });
+  const past = days.map((d, i) => ({ d, i })).filter(({ d }) => !d.future);
+  const firstFuture = days.findIndex(d => d.future);
+  if (firstFuture >= 0) {
+    const fx = xs[firstFuture] - colW / 2;
+    g += `<rect x="${fx}" y="${m.t}" width="${W - m.r - fx}" height="${y0 - m.t}" fill="var(--row)"/><text x="${(fx + W - m.r) / 2}" y="${m.t + 14}" text-anchor="middle">por venir</text>`;
+  }
+  if (kind === 'line' && past.length) {
+    const pts = past.map(({ i }) => `${xs[i]},${y(vals[i])}`);
+    const x0 = xs[past[0].i] - colW / 2;
+    const path = `M${x0},${y(base)} L${pts.join(' L')}`;
+    g += `<path d="${path} L${xs[past[past.length - 1].i]},${y0} L${x0},${y0} Z" fill="var(--accent)" opacity=".12"/>`;
+    g += `<path d="${path}" fill="none" stroke="var(--accent)" stroke-width="2" stroke-linejoin="round"/>`;
+    past.forEach(({ i }) => { g += `<circle cx="${xs[i]}" cy="${y(vals[i])}" r="4" fill="var(--accent)" stroke="var(--panel)" stroke-width="2"/>`; });
+    const li = past[past.length - 1].i;
+    g += `<text x="${xs[li]}" y="${y(vals[li]) - 10}" text-anchor="middle" style="fill:var(--text);font-weight:600">${vals[li]}</text>`;
+  }
+  if (kind === 'bars') {
+    const bw = Math.min(36, colW - 4);
+    past.forEach(({ d, i }) => {
+      const v = vals[i]; if (!v) return;
+      const h = y0 - y(v), r = Math.min(4, bw / 2, h);
+      g += `<path d="M${xs[i] - bw / 2},${y0} v${-(h - r)} q0,${-r} ${r},${-r} h${bw - 2 * r} q${r},0 ${r},${r} v${h - r} Z" fill="var(--accent)"/>`;
+      if (bw >= 18) g += `<text x="${xs[i]}" y="${y(v) - 4}" text-anchor="middle" style="fill:var(--text)">${v}</text>`;
+    });
+  }
+  g += `<line id="${boxId}X" x1="0" x2="0" y1="${m.t}" y2="${y0}" stroke="var(--muted)" stroke-width="1" visibility="hidden"/>`;
+  days.forEach((d, i) => { g += `<rect x="${xs[i] - colW / 2 - (d.weekBreak ? gap / 2 : 0)}" y="${m.t}" width="${colW + (d.weekBreak ? gap / 2 : 0) + (days[i + 1]?.weekBreak ? gap / 2 : 0)}" height="${y0 - m.t}" fill="transparent" data-i="${i}"/>`; });
+  box.innerHTML = `<svg viewBox="0 0 ${W} ${H}" height="${H}" role="img" aria-label="${kind === 'line' ? 'Acumulado de tareas por día hábil' : 'Tareas subidas por día hábil'}">${g}</svg><div class="tip" hidden></div>`;
+  const tip = box.querySelector('.tip'), cross = $(boxId + 'X');
+  box.querySelectorAll('rect[data-i]').forEach(r => {
+    r.onmouseenter = () => {
+      const d = days[+r.dataset.i];
+      const keys = d.items.slice(0, 8).map(i => `<div>${esc(i.key)} · ${esc(i.summary.length > 48 ? i.summary.slice(0, 48) + '…' : i.summary)}</div>`).join('') + (d.items.length > 8 ? `<div class="muted">y ${d.items.length - 8} más…</div>` : '');
+      tip.innerHTML = `<div style="font-weight:600">${WD[d.dt.getDay()]} ${fmtDate(d.date)}</div>` + (d.future ? '<div class="muted">Aún no ha llegado</div>'
+        : `<div>Subidas ese día: <b>${d.items.length}</b></div><div>Acumulado: <b>${d.total}</b></div>${keys ? `<div class="muted" style="margin-top:4px">${keys}</div>` : ''}`);
+      tip.hidden = false; cross.setAttribute('x1', xs[+r.dataset.i]); cross.setAttribute('x2', xs[+r.dataset.i]); cross.setAttribute('visibility', 'visible');
+      const left = xs[+r.dataset.i] / W * box.clientWidth;
+      tip.style.top = '8px'; tip.style.left = (left > box.clientWidth / 2 ? left - tip.offsetWidth - 12 : left + 12) + 'px';
+    };
+    r.onmouseleave = () => { tip.hidden = true; cross.setAttribute('visibility', 'hidden'); };
+  });
+}
+let spResize; window.addEventListener('resize', () => { clearTimeout(spResize); spResize = setTimeout(() => { if (!$('sprintView').hidden) renderSprintChart(); }, 150); });
+
+init();
+</script>
+</body>
+</html>
