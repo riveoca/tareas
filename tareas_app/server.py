@@ -124,6 +124,15 @@ def sprint_issues(sprint_id: int):
         raise HTTPException(502, str(e))
 
 
+@app.get("/api/sprint/{sprint_id}/burnup")
+def sprint_burnup(sprint_id: int, assignee: str | None = None):
+    """Informe de trabajo completado (puntos creados vs. cerrados) con los datos de Jira; con assignee, el personal."""
+    try:
+        return JiraClient().sprint_burnup(sprint_id, assignee or None)
+    except (JiraError, httpx.HTTPError) as e:
+        raise HTTPException(502, str(e))
+
+
 class PushIn(BaseModel):
     plan: Plan
     only_ids: list[str] | None = None

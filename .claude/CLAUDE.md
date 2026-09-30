@@ -16,7 +16,13 @@ textos de la app en español.
 - `jira.py` — cliente Jira: metadatos, `_fields_for` (campos enviados) y `push_plan` (crea/actualiza).
 - `models.py` — salida estructurada de la IA (`AIResult`) y datos de la app (`Plan`, `Epic`, `Task`, `Defaults`).
 - `server.py` — API FastAPI; `store.py` — persistencia JSON en `tareas.db`; `config.py` — lee `.env`.
-- `static/index.html` — toda la interfaz (JS inline).
+- `static/index.html` — toda la interfaz (JS inline). Dos vistas: Tareas y "Avance del sprint" (`#sprint`), en SVG y sin
+  fines de semana: "Informe de trabajo completado" del equipo como Jira: alcance (rojo), cerrados (verde),
+  directriz de 0 al alcance actual (`GET /api/sprint/{id}/burnup` → `JiraClient.sprint_burnup`, que reproduce la API
+  interna `greenhopper/.../scopechangeburndownchart.json`; sus horas vienen en hora local como si fueran UTC).
+  Debajo, el mismo informe personal (`?assignee=<nombre>`, por defecto el usuario de Jira) solo con sus tareas asignadas hoy.
+  El eje va del inicio al fin previsto; si el sprint sigue abierto después (o se cerró tarde), se alarga hasta hoy / el cierre y tareas creadas por día hábil
+  (`GET /api/sprint/{id}/issues` → `JiraClient.sprint_issues`).
 
 ## Reglas de negocio (decididas por el usuario)
 - En Jira cada tarea lleva solo su épica como padre; **no se envían etiquetas**.

@@ -7,13 +7,14 @@
 <style>
   :root {
     --bg: #f4f5f7; --panel: #fff; --text: #1d2330; --muted: #6b7280; --border: #e2e5ea; --row: #fafbfc;
-    --accent: #2563eb; --accent-soft: #e8efff; --ok: #15803d; --ok-soft: #e7f6ec; --err: #b91c1c; --warn: #b45309;
+    --accent: #2563eb; --done-line: #5e9a1c; --scope-line: #d04437; --guide-line: #8c8f94; --accent-soft: #e8efff; --ok: #15803d; --ok-soft: #e7f6ec; --err: #b91c1c; --warn: #b45309;
   }
   @media (prefers-color-scheme: dark) {
     :root { --bg: #111418; --panel: #1a1e24; --text: #e6e8eb; --muted: #9aa3ad; --border: #2c323a; --row: #1d2229;
-      --accent: #5b8cff; --accent-soft: #1e2a44; --ok: #4ade80; --ok-soft: #173024; --err: #f87171; --warn: #fbbf24; }
+      --accent: #5b8cff; --done-line: #82b536; --scope-line: #e34935; --guide-line: #8c8f94; --accent-soft: #1e2a44; --ok: #4ade80; --ok-soft: #173024; --err: #f87171; --warn: #fbbf24; }
   }
   * { box-sizing: border-box; }
+  [hidden] { display: none !important; }
   body { margin: 0; font: 14px/1.45 system-ui, -apple-system, "Segoe UI", sans-serif; background: var(--bg); color: var(--text); }
   button, input, select, textarea { font: inherit; color: inherit; }
   button { cursor: pointer; border: 1px solid var(--border); background: var(--panel); border-radius: 6px; padding: 6px 11px; white-space: nowrap; }
@@ -101,6 +102,17 @@
   .tip { position: absolute; pointer-events: none; background: var(--panel); border: 1px solid var(--border); border-radius: 8px; padding: 7px 10px; font-size: 12px; box-shadow: 0 4px 14px rgba(0,0,0,.12); max-width: 320px; z-index: 2; }
   .tip b { font-variant-numeric: tabular-nums; }
   .day-table { min-width: 0; width: auto; }
+  .burn-legend { display: flex; gap: 12px 32px; flex-wrap: wrap; padding-left: 36px; }
+  .burn-legend div { display: flex; gap: 10px; }
+  .burn-legend i { width: 30px; height: 3px; margin-top: 8px; flex-shrink: 0; }
+  .burn-legend p { margin: 0; }
+  .burn-legend strong { display: block; font-weight: 600; }
+  .burn-legend span { font-size: 12px; color: var(--muted); }
+  .tip em { font-style: normal; display: inline-block; width: 9px; height: 9px; border-radius: 2px; margin-right: 6px; }
+  .up { color: var(--done-line); } .add { color: var(--scope-line); }
+  .legend { display: flex; gap: 16px; margin: 0 0 4px; }
+  .legend i { display: inline-block; width: 16px; height: 2px; vertical-align: middle; margin-right: 6px; }
+  .legend i.dash { background: repeating-linear-gradient(90deg, var(--muted) 0 6px, transparent 6px 10px); }
   .day-table td, .day-table th { padding: 3px 12px 3px 0; font-variant-numeric: tabular-nums; }
 
   @media (max-width: 700px) {
@@ -132,13 +144,12 @@
 <main id="sprintView" hidden>
   <section class="card">
     <div class="card-head">
-      <h2>Tareas subidas en el sprint</h2>
+      <h2>Avance del sprint</h2>
       <span class="muted" id="spRange"></span>
       <span class="spacer"></span>
       <div class="filters">
         <select id="spSprint" onchange="loadSprintChart()"></select>
         <select id="spUser" onchange="renderSprintChart()"></select>
-        <label class="muted" title="Tareas creadas antes del inicio del sprint y movidas a él"><input type="checkbox" id="spPrev" style="width:auto" onchange="renderSprintChart()"> Incluir las creadas antes del sprint</label>
         <button class="ghost" onclick="loadSprintChart()" title="Recargar desde Jira">↻</button>
       </div>
     </div>
@@ -293,7 +304,9 @@ async function init() {
   $('provider').onchange = () => localStorage.setItem('provider', $('provider').value);
   ws = await api('/api/state');
   renderJiraStatus(); renderAll();
-  try { if (localStorage.getItem('view') === 'sprint') setView('sprint'); } catch {}
+  let v = location.hash === '#sprint' ? 'sprint' : null;
+  try { v = v || localStorage.getItem('view'); } catch {}
+  if (v === 'sprint') setView('sprint');
 }
 
 function renderJiraStatus() {
@@ -676,8 +689,7 @@ async function pushToJira(onlyIds) {
 }
 
 // ---------- Avance del sprint ----------
-let spData = null;
-const DAY = 86400000;
+let spData = null, spBurn = null, spMine = {}, spPrev = false;
 const parseDay = (d) => { const [y, m, dd] = d.split('-').map(Number); return new Date(y, m - 1, dd); };
 const isWeekend = (dt) => dt.getDay() === 0 || dt.getDay() === 6;
 const WD = ['dom', 'lun', 'mar', 'mié', 'jue', 'vie', 'sáb'];
@@ -700,21 +712,23 @@ async function loadSprintChart() {
   const id = Number($('spSprint').value);
   if (!id) return $('spBody').innerHTML = '<div class="empty">El proyecto no tiene sprints activos o futuros.</div>';
   $('spBody').innerHTML = '<div class="empty"><span class="spinner"></span> Leyendo el sprint de Jira…</div>';
-  try { spData = await api(`/api/sprint/${id}/issues`); }
+  try { [spData, spBurn] = await Promise.all([api(`/api/sprint/${id}/issues`), api(`/api/sprint/${id}/burnup`).catch(e => ({ error: e.message }))]); }
   catch (e) { spData = null; return $('spBody').innerHTML = `<div class="note err">${esc(e.message)}</div>`; }
-  const v = $('spUser').value, names = [...new Set(spData.issues.map(i => i.assignee).filter(Boolean))].sort();
-  $('spUser').innerHTML = '<option value="">Todo el equipo</option><option value="__none">Sin responsable</option>' + names.map(n => `<option>${esc(n)}</option>`).join('');
+  spMine = {};
+  const me = cfg.jira?.me, names = [...new Set(spData.issues.map(i => i.assignee).concat(me ? [me] : []).filter(Boolean))].sort();
+  const v = $('spUser').dataset.init ? $('spUser').value : (me || ''); $('spUser').dataset.init = 1;
+  $('spUser').innerHTML = '<option value="">Todo el equipo</option><option value="__none">Sin responsable</option>' + names.map(n => `<option value="${esc(n)}">${esc(n)}${n === me ? ' (yo)' : ''}</option>`).join('');
   $('spUser').value = [...$('spUser').options].some(o => o.value === v) ? v : '';
   renderSprintChart();
 }
 
 // Días hábiles del sprint; lo creado en fin de semana cuenta el lunes siguiente
 function sprintDays(sprint, issues, includePrev) {
-  const start = parseDay(sprint.startDate), end = parseDay(sprint.endDate || sprint.startDate);
   const today = parseDay(autoStart()), last = sprint.completeDate ? parseDay(sprint.completeDate) : today;
+  // Hasta el fin previsto; si el sprint sigue abierto (o se cerró) después, hasta hoy / el cierre
+  const start = parseDay(sprint.startDate), planned = parseDay(sprint.endDate || sprint.startDate), end = last > planned ? last : planned;
   const days = [];
-  for (let d = new Date(start); d <= end; d = new Date(d.getTime() + DAY + 3600000)) {
-    d.setHours(0, 0, 0, 0);
+  for (let d = new Date(start); d <= end; d = new Date(d.getFullYear(), d.getMonth(), d.getDate() + 1)) {
     if (!isWeekend(d)) days.push({ date: iso(d), dt: new Date(d), items: [], future: d > last, weekBreak: days.length > 0 && d.getDay() === 1 });
   }
   const prev = [];
@@ -729,98 +743,254 @@ function sprintDays(sprint, issues, includePrev) {
   return { days, prev };
 }
 
+const num = (v) => (Math.round(v * 10) / 10).toString().replace('.', ',');
+
+// Bloque del informe de trabajo completado (grupal o personal): título, fecha, leyenda, gráfica y tabla
+function burnSection(id, title, sub, whose, top = false) {
+  return `<h3 class="chart-title" style="font-size:14px;margin-top:${top ? 26 : 0}px">${title} <span class="muted" style="font-weight:400">· ${sub}, sin fines de semana</span></h3>
+    <p id="${id}Info" style="margin:4px 0 12px"></p>
+    <div class="burn-legend">
+      <div><i style="background:var(--done-line)"></i><p><strong>Trabajo completado</strong><span>Puntos de ${whose} ya cerradas en este sprint</span></p></div>
+      <div><i style="background:var(--guide-line)"></i><p><strong>Directriz</strong><span>Tasa de evolución ideal</span></p></div>
+      <div><i style="background:var(--scope-line)"></i><p><strong>Alcance del trabajo</strong><span>Puntos de ${whose} creadas en este sprint</span></p></div>
+    </div>
+    <div class="chart" id="${id}"></div>
+    <details style="margin-top:6px"><summary class="muted" style="cursor:pointer" id="${id}Sum">Tabla de actividad</summary><div id="${id}Table" class="table-wrap"></div></details>`;
+}
+
+// Informe personal: se pide a Jira por persona y se guarda mientras no se cambie de sprint
+async function drawMine(fu) {
+  const box = $('spMine');
+  if (!fu) { $('spMineInfo').innerHTML = ''; box.innerHTML = '<div class="empty">Elige una persona arriba para ver su informe.</div>'; return; }
+  const sid = spData.sprint.id;
+  if (!(fu in spMine)) {
+    box.innerHTML = '<div class="empty"><span class="spinner"></span> Leyendo tus tareas de Jira…</div>';
+    spMine[fu] = await api(`/api/sprint/${sid}/burnup?assignee=${encodeURIComponent(fu)}`).catch(e => ({ error: e.message }));
+    if (spData.sprint.id !== sid || $('spUser').value !== fu) return;
+  }
+  drawBurnup(spMine[fu], 'spMine');
+}
+
 function renderSprintChart() {
   if (!spData) return;
-  const { sprint } = spData, fu = $('spUser').value, includePrev = $('spPrev').checked;
+  const { sprint } = spData, fu = $('spUser').value;
   $('spRange').textContent = sprint.startDate ? `${fmtDate(sprint.startDate)} → ${fmtDate(sprint.endDate)} · sin fines de semana` : '';
   if (!sprint.startDate) return $('spBody').innerHTML = '<div class="empty">Este sprint aún no ha empezado.</div>';
   const issues = spData.issues.filter(i => !fu || (fu === '__none' ? !i.assignee : i.assignee === fu));
-  const { days, prev } = sprintDays(sprint, issues, includePrev);
+  const { days, prev } = sprintDays(sprint, issues, spPrev);
   const past = days.filter(d => !d.future), inSprint = past.reduce((a, d) => a + d.items.length, 0);
   const total = past.length ? past[past.length - 1].total : 0;
   const best = past.reduce((b, d) => d.items.length > (b?.items.length ?? -1) ? d : b, null);
   $('spBody').innerHTML = `
+    ${burnSection('spBurn', 'Informe de trabajo completado', 'todo el sprint', 'las tareas')}
+    ${fu === cfg.jira?.me ? burnSection('spMine', 'Mi trabajo completado', 'solo mis tareas asignadas', 'mis tareas', true)
+      : burnSection('spMine', 'Trabajo completado personal', fu ? (fu === '__none' ? 'tareas sin responsable' : `solo las tareas de ${esc(fu)}`) : 'elige una persona', 'sus tareas', true)}
+
+    <h3 class="chart-title" style="font-size:14px;margin-top:22px;display:flex;gap:12px;align-items:center;flex-wrap:wrap">Tareas subidas${fu ? ` <span class="muted" style="font-weight:400">· ${fu === '__none' ? 'sin responsable' : esc(fu)}</span>` : ''}
+      <label class="muted" style="font-weight:400" title="Tareas creadas antes del inicio del sprint y movidas a él"><input type="checkbox" style="width:auto" ${spPrev ? 'checked' : ''} onchange="spPrev = this.checked; renderSprintChart()"> Incluir las creadas antes del sprint</label></h3>
     <div class="tiles">
-      <div class="tile"><div class="v">${total}</div><div class="l">tareas ${includePrev ? 'en el sprint' : 'subidas durante el sprint'}</div></div>
+      <div class="tile"><div class="v">${total}</div><div class="l">tareas ${spPrev ? 'en el sprint' : 'subidas durante el sprint'}</div></div>
       <div class="tile"><div class="v">${past.length} / ${days.length}</div><div class="l">días hábiles transcurridos</div></div>
-      <div class="tile"><div class="v">${past.length ? (inSprint / past.length).toFixed(1).replace('.', ',') : '0'}</div><div class="l">tareas por día hábil</div></div>
-      <div class="tile"><div class="v">${prev.length}</div><div class="l">creadas antes del sprint ${includePrev ? '(incluidas)' : '(no incluidas)'}</div></div>
+      <div class="tile"><div class="v">${past.length ? num(inSprint / past.length) : '0'}</div><div class="l">tareas por día hábil</div></div>
+      <div class="tile"><div class="v">${prev.length}</div><div class="l">creadas antes del sprint ${spPrev ? '(incluidas)' : '(no incluidas)'}</div></div>
     </div>
     <div class="chart-title">Acumulado de tareas</div>
     <div class="chart" id="spLine"></div>
     <div class="chart-title" style="margin-top:14px">Tareas subidas por día${best?.items.length ? ` <span class="muted">· máximo ${best.items.length} el ${WD[best.dt.getDay()]} ${fmtDate(best.date)}</span>` : ''}</div>
     <div class="chart" id="spBars"></div>
-    <p class="muted" style="margin:10px 0 0">Solo días de lunes a viernes; la línea discontinua marca el corte del fin de semana. Lo subido en sábado o domingo cuenta el lunes siguiente.</p>
+    <p class="muted" style="margin:10px 0 0">Solo días de lunes a viernes; la línea discontinua vertical marca el corte del fin de semana. Lo que pasa en sábado o domingo cuenta el lunes siguiente.
+      El informe de trabajo completado usa los mismos datos que Jira; solo se quitan del eje los sábados y domingos.</p>
     <details style="margin-top:10px"><summary class="muted" style="cursor:pointer">Ver tabla por día</summary>
-      <table class="day-table"><tr><th>Día</th><th>Subidas</th><th>Acumulado</th></tr>
+      <table class="day-table"><tr><th>Día</th><th>Tareas subidas</th><th>Acumulado</th></tr>
       ${past.map(d => `<tr><td>${WD[d.dt.getDay()]} ${fmtDate(d.date)}</td><td>${d.items.length}</td><td>${d.total}</td></tr>`).join('')}</table>
     </details>`;
-  drawSprintChart('spLine', days, 'line', includePrev ? prev.length : 0);
+  drawBurnup(spBurn, 'spBurn');
+  drawMine(fu);
+  drawSprintChart('spLine', days, 'line', spPrev ? prev.length : 0);
   drawSprintChart('spBars', days, 'bars');
 }
 
-function drawSprintChart(boxId, days, kind, base = 0) {
-  const box = $(boxId), W = Math.max(box.clientWidth, 300), H = kind === 'line' ? 240 : 150;
-  const m = { t: 12, r: 16, b: 34, l: 36 };
-  const breaks = days.filter(d => d.weekBreak).length, gap = 14;
+// Marco común: columnas por día hábil (hueco en cada fin de semana), cuadrícula, ejes y zona "por venir"
+function chartFrame(box, days, H, max) {
+  const W = Math.max(box.clientWidth, 300), m = { t: 12, r: 16, b: 34, l: 36 }, gap = 14;
+  const breaks = days.filter(d => d.weekBreak).length;
   const colW = (W - m.l - m.r - breaks * gap) / days.length;
-  let off = 0; const xs = days.map(d => { if (d.weekBreak) off += gap; return m.l + off; });
-  days.forEach((d, i) => { xs[i] += i * colW + colW / 2; });
-  const vals = days.map(d => kind === 'line' ? d.total : (d.future ? null : d.items.length));
-  const max = Math.max(1, ...vals.filter(v => v != null));
+  let off = 0; const xs = days.map((d, i) => { if (d.weekBreak) off += gap; return m.l + off + i * colW + colW / 2; });
+  max = Math.max(1, max);
   const step = [1, 2, 5, 10, 20, 25, 50, 100, 200, 500].find(s => max / s <= 5) || Math.ceil(max / 5);
   const top = Math.ceil(max / step) * step, y = (v) => m.t + (H - m.t - m.b) * (1 - v / top), y0 = y(0);
   let g = '';
-  for (let v = 0; v <= top; v += step)
-    g += `<line x1="${m.l}" x2="${W - m.r}" y1="${y(v)}" y2="${y(v)}" stroke="var(--border)" stroke-width="1"/><text x="${m.l - 6}" y="${y(v) + 4}" text-anchor="end">${v}</text>`;
-  days.forEach((d, i) => {
-    if (d.weekBreak) { const bx = xs[i] - colW / 2 - gap / 2; g += `<line x1="${bx}" x2="${bx}" y1="${m.t}" y2="${y0}" stroke="var(--muted)" stroke-width="1" stroke-dasharray="3 3" opacity=".6"><title>Fin de semana</title></line>`; }
-    const every = Math.ceil(days.length / Math.max(1, Math.floor((W - m.l - m.r) / 46)));
-    if (i % every === 0 || i === days.length - 1)
-      g += `<text x="${xs[i]}" y="${H - m.b + 15}" text-anchor="middle">${WD[d.dt.getDay()]}</text><text x="${xs[i]}" y="${H - m.b + 28}" text-anchor="middle">${d.date.slice(8)}/${d.date.slice(5, 7)}</text>`;
-  });
-  const past = days.map((d, i) => ({ d, i })).filter(({ d }) => !d.future);
   const firstFuture = days.findIndex(d => d.future);
   if (firstFuture >= 0) {
     const fx = xs[firstFuture] - colW / 2;
     g += `<rect x="${fx}" y="${m.t}" width="${W - m.r - fx}" height="${y0 - m.t}" fill="var(--row)"/><text x="${(fx + W - m.r) / 2}" y="${m.t + 14}" text-anchor="middle">por venir</text>`;
   }
-  if (kind === 'line' && past.length) {
-    const pts = past.map(({ i }) => `${xs[i]},${y(vals[i])}`);
-    const x0 = xs[past[0].i] - colW / 2;
-    const path = `M${x0},${y(base)} L${pts.join(' L')}`;
-    g += `<path d="${path} L${xs[past[past.length - 1].i]},${y0} L${x0},${y0} Z" fill="var(--accent)" opacity=".12"/>`;
-    g += `<path d="${path}" fill="none" stroke="var(--accent)" stroke-width="2" stroke-linejoin="round"/>`;
-    past.forEach(({ i }) => { g += `<circle cx="${xs[i]}" cy="${y(vals[i])}" r="4" fill="var(--accent)" stroke="var(--panel)" stroke-width="2"/>`; });
-    const li = past[past.length - 1].i;
-    g += `<text x="${xs[li]}" y="${y(vals[li]) - 10}" text-anchor="middle" style="fill:var(--text);font-weight:600">${vals[li]}</text>`;
-  }
-  if (kind === 'bars') {
-    const bw = Math.min(36, colW - 4);
-    past.forEach(({ d, i }) => {
-      const v = vals[i]; if (!v) return;
-      const h = y0 - y(v), r = Math.min(4, bw / 2, h);
-      g += `<path d="M${xs[i] - bw / 2},${y0} v${-(h - r)} q0,${-r} ${r},${-r} h${bw - 2 * r} q${r},0 ${r},${r} v${h - r} Z" fill="var(--accent)"/>`;
-      if (bw >= 18) g += `<text x="${xs[i]}" y="${y(v) - 4}" text-anchor="middle" style="fill:var(--text)">${v}</text>`;
-    });
-  }
-  g += `<line id="${boxId}X" x1="0" x2="0" y1="${m.t}" y2="${y0}" stroke="var(--muted)" stroke-width="1" visibility="hidden"/>`;
-  days.forEach((d, i) => { g += `<rect x="${xs[i] - colW / 2 - (d.weekBreak ? gap / 2 : 0)}" y="${m.t}" width="${colW + (d.weekBreak ? gap / 2 : 0) + (days[i + 1]?.weekBreak ? gap / 2 : 0)}" height="${y0 - m.t}" fill="transparent" data-i="${i}"/>`; });
-  box.innerHTML = `<svg viewBox="0 0 ${W} ${H}" height="${H}" role="img" aria-label="${kind === 'line' ? 'Acumulado de tareas por día hábil' : 'Tareas subidas por día hábil'}">${g}</svg><div class="tip" hidden></div>`;
-  const tip = box.querySelector('.tip'), cross = $(boxId + 'X');
+  for (let v = 0; v <= top; v += step)
+    g += `<line x1="${m.l}" x2="${W - m.r}" y1="${y(v)}" y2="${y(v)}" stroke="var(--border)" stroke-width="1"/><text x="${m.l - 6}" y="${y(v) + 4}" text-anchor="end">${v}</text>`;
+  const every = Math.ceil(days.length / Math.max(1, Math.floor((W - m.l - m.r) / 46)));
+  days.forEach((d, i) => {
+    if (d.weekBreak) { const bx = xs[i] - colW / 2 - gap / 2; g += `<line x1="${bx}" x2="${bx}" y1="${m.t}" y2="${y0}" stroke="var(--muted)" stroke-width="1" stroke-dasharray="3 3" opacity=".6"><title>Fin de semana</title></line>`; }
+    if (i % every === 0 || i === days.length - 1)
+      g += `<text x="${xs[i]}" y="${H - m.b + 15}" text-anchor="middle">${WD[d.dt.getDay()]}</text><text x="${xs[i]}" y="${H - m.b + 28}" text-anchor="middle">${d.date.slice(8)}/${d.date.slice(5, 7)}</text>`;
+  });
+  g += `<line class="cross" x1="0" x2="0" y1="${m.t}" y2="${y0}" stroke="var(--muted)" stroke-width="1" visibility="hidden"/>`;
+  return { W, H, m, gap, colW, xs, y, y0, top, g };
+}
+
+// Capa de hover: una franja por día, cruz vertical y tooltip con tipHtml(i)
+function chartHover(box, days, f, label, tipHtml) {
+  const { xs, colW, gap, m, y0, W, H } = f;
+  let hit = '';
+  days.forEach((d, i) => { hit += `<rect x="${xs[i] - colW / 2 - (d.weekBreak ? gap / 2 : 0)}" y="${m.t}" width="${colW + (d.weekBreak ? gap / 2 : 0) + (days[i + 1]?.weekBreak ? gap / 2 : 0)}" height="${y0 - m.t}" fill="transparent" data-i="${i}"/>`; });
+  box.innerHTML = `<svg viewBox="0 0 ${W} ${H}" height="${H}" role="img" aria-label="${label}">${f.g}${hit}</svg><div class="tip" hidden></div>`;
+  const tip = box.querySelector('.tip'), cross = box.querySelector('.cross');
   box.querySelectorAll('rect[data-i]').forEach(r => {
+    const i = +r.dataset.i, d = days[i];
     r.onmouseenter = () => {
-      const d = days[+r.dataset.i];
-      const keys = d.items.slice(0, 8).map(i => `<div>${esc(i.key)} · ${esc(i.summary.length > 48 ? i.summary.slice(0, 48) + '…' : i.summary)}</div>`).join('') + (d.items.length > 8 ? `<div class="muted">y ${d.items.length - 8} más…</div>` : '');
-      tip.innerHTML = `<div style="font-weight:600">${WD[d.dt.getDay()]} ${fmtDate(d.date)}</div>` + (d.future ? '<div class="muted">Aún no ha llegado</div>'
-        : `<div>Subidas ese día: <b>${d.items.length}</b></div><div>Acumulado: <b>${d.total}</b></div>${keys ? `<div class="muted" style="margin-top:4px">${keys}</div>` : ''}`);
-      tip.hidden = false; cross.setAttribute('x1', xs[+r.dataset.i]); cross.setAttribute('x2', xs[+r.dataset.i]); cross.setAttribute('visibility', 'visible');
-      const left = xs[+r.dataset.i] / W * box.clientWidth;
+      tip.innerHTML = `<div style="font-weight:600">${WD[d.dt.getDay()]} ${fmtDate(d.date)}</div>` + (d.future ? '<div class="muted">Aún no ha llegado</div>' : tipHtml(i));
+      tip.hidden = false; cross.setAttribute('x1', xs[i]); cross.setAttribute('x2', xs[i]); cross.setAttribute('visibility', 'visible');
+      const left = xs[i] / W * box.clientWidth;
       tip.style.top = '8px'; tip.style.left = (left > box.clientWidth / 2 ? left - tip.offsetWidth - 12 : left + 12) + 'px';
     };
     r.onmouseleave = () => { tip.hidden = true; cross.setAttribute('visibility', 'hidden'); };
   });
 }
+
+const issueList = (items) => items.slice(0, 8).map(i => `<div>${esc(i.key)}${i.points != null ? ` (${num(i.points)})` : ''} · ${esc(i.summary.length > 44 ? i.summary.slice(0, 44) + '…' : i.summary)}</div>`).join('') + (items.length > 8 ? `<div class="muted">y ${items.length - 8} más…</div>` : '');
+
+function drawSprintChart(boxId, days, kind, base = 0) {
+  const box = $(boxId);
+  const vals = days.map(d => kind === 'line' ? d.total : (d.future ? null : d.items.length));
+  const f = chartFrame(box, days, kind === 'line' ? 240 : 150, Math.max(...vals.filter(v => v != null)));
+  const { xs, y, y0, colW } = f;
+  const past = days.map((d, i) => ({ d, i })).filter(({ d }) => !d.future);
+  if (kind === 'line' && past.length) {
+    const x0 = xs[past[0].i] - colW / 2;
+    const path = `M${x0},${y(base)} L${past.map(({ i }) => `${xs[i]},${y(vals[i])}`).join(' L')}`;
+    f.g += `<path d="${path} L${xs[past[past.length - 1].i]},${y0} L${x0},${y0} Z" fill="var(--accent)" opacity=".12"/>`;
+    f.g += `<path d="${path}" fill="none" stroke="var(--accent)" stroke-width="2" stroke-linejoin="round"/>`;
+    past.forEach(({ i }) => { f.g += `<circle cx="${xs[i]}" cy="${y(vals[i])}" r="4" fill="var(--accent)" stroke="var(--panel)" stroke-width="2"/>`; });
+    const li = past[past.length - 1].i;
+    f.g += `<text x="${xs[li]}" y="${y(vals[li]) - 10}" text-anchor="middle" style="fill:var(--text);font-weight:600">${vals[li]}</text>`;
+  }
+  if (kind === 'bars') {
+    const bw = Math.min(36, colW - 4);
+    past.forEach(({ i }) => {
+      const v = vals[i]; if (!v) return;
+      const h = y0 - y(v), r = Math.min(4, bw / 2, h);
+      f.g += `<path d="M${xs[i] - bw / 2},${y0} v${-(h - r)} q0,${-r} ${r},${-r} h${bw - 2 * r} q${r},0 ${r},${r} v${h - r} Z" fill="var(--accent)"/>`;
+      if (bw >= 18) f.g += `<text x="${xs[i]}" y="${y(v) - 4}" text-anchor="middle" style="fill:var(--text)">${v}</text>`;
+    });
+  }
+  chartHover(box, days, f, kind === 'line' ? 'Acumulado de tareas por día hábil' : 'Tareas subidas por día hábil', (i) => {
+    const d = days[i], keys = issueList(d.items);
+    return `<div>Subidas ese día: <b>${d.items.length}</b></div><div>Acumulado: <b>${d.total}</b></div>${keys ? `<div class="muted" style="margin-top:4px">${keys}</div>` : ''}`;
+  });
+}
+
+// Informe de trabajo completado (como Jira): alcance (rojo) y cerrados (verde) en escalón, directriz de 0 al
+// alcance actual. El eje es tiempo laborable: los sábados y domingos (hora local) se quitan.
+const MES = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sept', 'oct', 'nov', 'dic'];
+const MESL = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'];
+const fmtLargo = (d) => `${d.getDate()} de ${MESL[d.getMonth()]} de ${d.getFullYear()}`;
+const fmtHora = (t) => { const d = new Date(t); return `${WD[d.getDay()]} ${d.getDate()} ${MES[d.getMonth()]} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`; };
+
+function drawBurnup(b, id) {
+  const box = $(id);
+  if (!b || b.error) { box.innerHTML = `<div class="note err">No se pudo leer el informe de Jira${b?.error ? ': ' + esc(b.error) : ''}</div>`; return; }
+  // Tramos laborables (lunes a viernes, hora local) y funciones tiempo real ↔ tiempo laborable
+  const work = [], off = [];
+  for (let d = new Date(new Date(b.start).setHours(0, 0, 0, 0)); d.getTime() < b.end; d = new Date(d.getFullYear(), d.getMonth(), d.getDate() + 1)) {
+    const a = Math.max(d.getTime(), b.start), z = Math.min(new Date(d.getFullYear(), d.getMonth(), d.getDate() + 1).getTime(), b.end);
+    if (!isWeekend(d)) work.push({ start: a, end: z, day: new Date(d) });
+    else if (off.length && off[off.length - 1].end === a) off[off.length - 1].end = z; else off.push({ start: a, end: z });
+  }
+  const wt = (t) => work.reduce((s, r) => s + Math.max(0, Math.min(t, r.end) - r.start), 0);
+  const total = Math.max(1, wt(b.end));
+  const unwt = (w) => { for (const r of work) { if (w <= r.end - r.start) return r.start + w; w -= r.end - r.start; } return b.end; };
+
+  const evs = b.events, started = b.now > b.start, hoy = Math.min(b.now, b.end);
+  const planned = b.planned_end ?? b.end, late = b.end > planned, plannedTotal = Math.max(1, wt(planned));
+  const scopeNow = evs.length ? evs[evs.length - 1].scope : b.start_scope, closedNow = evs.length ? evs[evs.length - 1].closed : 0;
+  const valAt = (t, k, ini) => { let v = ini; for (const e of evs) { if (e.t <= t) v = e[k]; else break; } return v; };
+  const guideAt = (t) => scopeNow * Math.min(1, wt(t) / plannedTotal);
+  $(id + 'Info').innerHTML = `<b>Fecha</b> - ${fmtLargo(new Date(b.start))} - ${fmtLargo(new Date(planned))}${late ? ` <span class="warn">(fin previsto superado: ${b.finished ? `cerrado el ${fmtLargo(new Date(b.now))}` : 'el sprint sigue abierto'})</span>` : ''} · <span class="muted">${esc(b.field)}</span> ·
+    cerrados <b>${num(closedNow)}</b> de <b>${num(scopeNow)}</b> · directriz ahora <b>${num(guideAt(hoy))}</b>
+    <span class="muted">(${closedNow >= guideAt(hoy) ? (id === 'spMine' ? 'vas adelantado' : 'vais adelantados') : (id === 'spMine' ? 'vas atrasado' : 'vais atrasados')})</span>`;
+
+  const W = Math.max(box.clientWidth, 320), H = 380, m = { l: 56, r: 16, t: 22, b: 48 };
+  const pw = W - m.l - m.r, ph = H - m.t - m.b;
+  const x = (t) => m.l + pw * wt(t) / total;
+  const vmax = Math.max(1, scopeNow, ...evs.map(e => e.scope));
+  const step = [1, 2, 5, 10, 20, 25, 50, 100, 200, 500].find(s => vmax / s <= 6) || Math.ceil(vmax / 6);
+  const top = Math.ceil((vmax * 1.05) / step) * step, y = (v) => m.t + ph - v / top * ph;
+  let g = '';
+  for (let v = 0; v <= top; v += step)
+    g += `<line x1="${m.l}" x2="${m.l + pw}" y1="${y(v)}" y2="${y(v)}" stroke="var(--border)"/><text x="${m.l - 8}" y="${y(v) + 4}" text-anchor="end">${v}</text>`;
+  g += `<text transform="translate(14 ${m.t + ph / 2}) rotate(-90)" text-anchor="middle">${esc(b.field)}</text>`;
+  // Eje X: una marca al inicio de cada día laborable (espaciadas si no caben)
+  const every = Math.ceil(work.length / Math.max(1, Math.floor(pw / 56)));
+  let lastX = -Infinity;
+  work.forEach((r, n) => {
+    const tx = x(r.start);
+    if (n % every || tx - lastX < 64) return;
+    lastX = tx;
+    g += `<line x1="${tx}" x2="${tx}" y1="${m.t + ph}" y2="${m.t + ph + 5}" stroke="var(--muted)"/><text x="${tx}" y="${m.t + ph + 18}" text-anchor="${n ? 'middle' : 'start'}">${WD[r.day.getDay()]} ${r.day.getDate()} ${MES[r.day.getMonth()]}</text>`;
+  });
+  off.filter(r => r.start > b.start && r.end < b.end).forEach(r => {
+    g += `<line x1="${x(r.start)}" x2="${x(r.start)}" y1="${m.t}" y2="${m.t + ph}" stroke="var(--muted)" stroke-dasharray="2 4" opacity=".5"><title>Fin de semana (no se muestra)</title></line>`;
+  });
+  g += `<text x="${m.l + pw / 2}" y="${H - 8}" text-anchor="middle">Fecha</text>`;
+  g += `<rect x="${m.l}" y="${m.t}" width="${pw}" height="${ph}" fill="none" stroke="var(--muted)" stroke-opacity=".5"/>`;
+  // Directriz: de 0 al inicio al alcance actual al final
+  g += `<path d="M${x(b.start)},${y(0)} L${x(planned)},${y(scopeNow)} H${x(b.end)}" fill="none" stroke="var(--guide-line)" stroke-width="2"/>`;
+  if (late) g += `<line x1="${x(planned)}" x2="${x(planned)}" y1="${m.t}" y2="${m.t + ph}" stroke="var(--warn)" stroke-dasharray="4 3"/><text x="${x(planned) - 4}" y="${m.t + 12}" text-anchor="end" style="fill:var(--warn)">Fin previsto</text>`;
+  // Escalones hasta hoy (eventos simultáneos en un solo salto)
+  const stepPath = (k, ini) => {
+    let d = `M${x(b.start)},${y(ini)}`;
+    for (let i = 0; i < evs.length; i++) if (!evs[i + 1] || evs[i + 1].t !== evs[i].t) d += `H${x(evs[i].t)}V${y(evs[i][k])}`;
+    return d + `H${x(hoy)}`;
+  };
+  if (started) {
+    g += `<path d="${stepPath('scope', b.start_scope)}" fill="none" stroke="var(--scope-line)" stroke-width="2"/>`;
+    g += `<path d="${stepPath('closed', 0)}" fill="none" stroke="var(--done-line)" stroke-width="2"/>`;
+  }
+  if (!b.finished) {
+    g += `<line x1="${x(started ? hoy : b.start)}" x2="${x(b.end)}" y1="${y(scopeNow)}" y2="${y(scopeNow)}" stroke="var(--scope-line)" stroke-width="3" stroke-dasharray="2 4"/>`;
+    if (started) g += `<line x1="${x(hoy)}" x2="${x(hoy)}" y1="${m.t}" y2="${m.t + ph}" stroke="var(--text)" stroke-opacity=".6" stroke-dasharray="4 3"/><text x="${x(hoy)}" y="${m.t - 7}" text-anchor="middle" style="fill:var(--text)">Hoy</text>`;
+  }
+  g += `<line class="cross" x1="0" x2="0" y1="${m.t}" y2="${m.t + ph}" stroke="var(--text)" stroke-opacity=".35" visibility="hidden"/>`;
+  g += `<rect class="zone" x="${m.l}" y="${m.t}" width="${pw}" height="${ph}" fill="transparent"/>`;
+  box.innerHTML = `<svg viewBox="0 0 ${W} ${H}" height="${H}" role="img" aria-label="Informe de trabajo completado del sprint">${g}</svg><div class="tip" hidden></div>`;
+
+  const svg = box.querySelector('svg'), tip = box.querySelector('.tip'), cross = box.querySelector('.cross'), zone = box.querySelector('.zone');
+  zone.onmousemove = (ev) => {
+    const r = svg.getBoundingClientRect(), px = (ev.clientX - r.left) * W / r.width;
+    const t = unwt(Math.max(0, Math.min(1, (px - m.l) / pw)) * total), fut = !started || t > hoy;
+    cross.setAttribute('x1', px); cross.setAttribute('x2', px); cross.setAttribute('visibility', 'visible');
+    tip.innerHTML = `<div style="font-weight:600">${fmtHora(t)}</div>` +
+      (fut ? '' : `<div><em style="background:var(--done-line)"></em>Cerradas: <b>${num(valAt(t, 'closed', 0))}</b></div>`) +
+      `<div><em style="background:var(--guide-line)"></em>Directriz: <b>${num(guideAt(t))}</b></div>` +
+      `<div><em style="background:var(--scope-line)"></em>Creadas: <b>${num(fut ? scopeNow : valAt(t, 'scope', b.start_scope))}</b></div>`;
+    tip.hidden = false;
+    const cx = ev.clientX - box.getBoundingClientRect().left, cy = ev.clientY - box.getBoundingClientRect().top;
+    tip.style.left = (cx + tip.offsetWidth + 20 > box.clientWidth ? cx - tip.offsetWidth - 14 : cx + 14) + 'px';
+    tip.style.top = Math.max(0, cy - 20) + 'px';
+  };
+  zone.onmouseleave = () => { tip.hidden = true; cross.setAttribute('visibility', 'hidden'); };
+
+  // Tabla de actividad
+  let pc = 0, ps = b.start_scope;
+  const rows = evs.map(e => {
+    const dc = e.closed - pc, ds = e.scope - ps; pc = e.closed; ps = e.scope;
+    const sg = (v, cls) => v ? `<span class="${cls}">${v > 0 ? '+' : ''}${num(v)}</span> ` : '';
+    return `<tr><td>${fmtHora(e.t)}</td><td>${esc(e.event)}</td><td><a href="${browse(e.key)}" target="_blank">${esc(e.key)}</a> ${esc(e.summary)}</td><td>${sg(dc, 'up')}${num(e.closed)}</td><td>${sg(ds, 'add')}${num(e.scope)}</td></tr>`;
+  });
+  $(id + 'Sum').textContent = `Tabla de actividad (${evs.length} eventos)`;
+  $(id + 'Table').innerHTML = `<table class="day-table"><tr><th>Fecha</th><th>Evento</th><th>Actividad</th><th>Puntos cerrados</th><th>Puntos creados</th></tr>
+    <tr><td>${fmtHora(b.start)}</td><td>Inicio del sprint</td><td></td><td>0</td><td>${num(b.start_scope)}</td></tr>${rows.join('')}</table>`;
+}
+
 let spResize; window.addEventListener('resize', () => { clearTimeout(spResize); spResize = setTimeout(() => { if (!$('sprintView').hidden) renderSprintChart(); }, 150); });
 
 init();
