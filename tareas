@@ -1,0 +1,4 @@
+#!/usr/bin/env bash
+# Lanzador: ./tareas [serve|check]
+DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+cd "$DIR" && exec "$DIR/.venv/bin/python" -m tareas_app "$@"

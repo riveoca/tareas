@@ -1,0 +1,80 @@
+{
+  "tareas": {
+    "mtime": 1790620326.548123,
+    "seen": 1790704710.8933754,
+    "ast_hash": "aac42e00e6ff2c282832b7cc493d7109",
+    "semantic_hash": "aac42e00e6ff2c282832b7cc493d7109"
+  },
+  "tareas_app/__init__.py": {
+    "mtime": 1790620217.1353397,
+    "seen": 1790704710.8933792,
+    "ast_hash": "2ee5daa3734684878decd16acfa0abbc",
+    "semantic_hash": "2ee5daa3734684878decd16acfa0abbc"
+  },
+  "tareas_app/__main__.py": {
+    "mtime": 1790625880.5954115,
+    "seen": 1790704710.8933818,
+    "ast_hash": "9c2c390e15100637deb3805e061bb2a1",
+    "semantic_hash": "9c2c390e15100637deb3805e061bb2a1"
+  },
+  "tareas_app/config.py": {
+    "mtime": 1790626723.494529,
+    "seen": 1790704710.8933837,
+    "ast_hash": "d04d99a0cc27e3ed766eaad41614c973",
+    "semantic_hash": "d04d99a0cc27e3ed766eaad41614c973"
+  },
+  "tareas_app/jira.py": {
+    "mtime": 1790687612.721511,
+    "seen": 1790704710.8933945,
+    "ast_hash": "6d3b7ac6b4179e9bc977debd4c265498",
+    "semantic_hash": "6d3b7ac6b4179e9bc977debd4c265498"
+  },
+  "tareas_app/llm.py": {
+    "mtime": 1790689039.9885685,
+    "seen": 1790704710.8933978,
+    "ast_hash": "fb96e0d566a54173e17246eaaf65f48c",
+    "semantic_hash": "fb96e0d566a54173e17246eaaf65f48c"
+  },
+  "tareas_app/models.py": {
+    "mtime": 1790630361.2947228,
+    "seen": 1790704710.8933995,
+    "ast_hash": "f3e44bf6565f4180712723d287a089b7",
+    "semantic_hash": "f3e44bf6565f4180712723d287a089b7"
+  },
+  "tareas_app/server.py": {
+    "mtime": 1790624924.1206086,
+    "seen": 1790704710.893401,
+    "ast_hash": "a81c82eaa055d1bd10ab4845db7caea5",
+    "semantic_hash": "a81c82eaa055d1bd10ab4845db7caea5"
+  },
+  "tareas_app/store.py": {
+    "mtime": 1790624309.7415829,
+    "seen": 1790704710.8934023,
+    "ast_hash": "afa36b2839a7c706f9a947ffc6c2a970",
+    "semantic_hash": "afa36b2839a7c706f9a947ffc6c2a970"
+  },
+  ".claude/CLAUDE.md": {
+    "mtime": 1790704540.0899956,
+    "seen": 1790704710.893404,
+    "ast_hash": "cca78d95f4624a7a8376c9d321e4b8a8",
+    "semantic_hash": "cca78d95f4624a7a8376c9d321e4b8a8"
+  },
+  "README.md": {
+    "mtime": 1790625005.7888489,
+    "seen": 1790704710.8934088,
+    "ast_hash": "5a8fba9a72d1cff8a82a0fc21d42b910",
+    "semantic_hash": "5a8fba9a72d1cff8a82a0fc21d42b910"
+  },
+  "requirements.txt": {
+    "mtime": 1790620217.12834,
+    "seen": 1790704710.8934102,
+    "ast_hash": "54561b829a516ea504d3bd796440b1f9",
+    "semantic_hash": "54561b829a516ea504d3bd796440b1f9"
+  },
+  "tareas_app/static/index.html": {
+    "mtime": 1790630383.4153814,
+    "seen": 1790704710.8934116,
+    "ast_hash": "12d8518602e607de68ca95924cf63f6c",
+    "semantic_hash": "12d8518602e607de68ca95924cf63f6c"
+  }
+}

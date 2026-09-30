@@ -1,0 +1,19 @@
+{
+  "runs": [
+    {
+      "date": "2026-09-29T17:58:30.895686+00:00",
+      "input_tokens": 43419,
+      "output_tokens": 0,
+      "files": 14
+    },
+    {
+      "date": "2026-09-29T18:13:54.802902+00:00",
+      "input_tokens": 0,
+      "output_tokens": 0,
+      "files": 14,
+      "note": "rebuild with UI script, semantic from cache"
+    }
+  ],
+  "total_input_tokens": 43419,
+  "total_output_tokens": 0
+}
