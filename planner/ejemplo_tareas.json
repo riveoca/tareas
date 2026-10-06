@@ -1,0 +1,263 @@
+[
+  {
+    "titulo": "Configuración base del proyecto (contenedor, variables de entorno, URL y credenciales)",
+    "deposito": "Ejecución",
+    "inicio": "04/09/2026",
+    "fin": "04/09/2026",
+    "descripcion": "Parametrización del contenedor y corrección para que no choque con otros proyectos; configuración del sitio centralizada en variables de entorno; URL real y credenciales del sitio a consultar.\nJira: SERVITEL-5291, 5298, 5301, 5303. Sprint 23.",
+    "estado": "Completado"
+  },
+  {
+    "titulo": "Autenticación y seguridad (login automatizado, BD de login, llave de acceso a la API y sus pruebas, verificación de identidad)",
+    "deposito": "Ejecución",
+    "inicio": "04/09/2026",
+    "fin": "04/09/2026",
+    "descripcion": "Prueba automatizada de inicio de sesión y corrección de la validación de éxito del login; base de datos para el login de seguridad; endpoints de la API protegidos con llave de acceso y sus pruebas; filtro de verificación de identidad del usuario.\nJira: SERVITEL-5299, 5300, 5302, 5305, 5324, 5363. Sprint 23.",
+    "estado": "Completado"
+  },
+  {
+    "titulo": "Resolución automática de la verificación por imagen (captcha)",
+    "deposito": "Ejecución",
+    "inicio": "04/09/2026",
+    "fin": "04/09/2026",
+    "descripcion": "Resolución automática del paso de verificación por imagen y carga de los registros base de imágenes de verificación.\nJira: SERVITEL-5325, 5326. Sprint 23.",
+    "estado": "Completado"
+  },
+  {
+    "titulo": "Endpoints de consulta de guías (scraping, historial, último movimiento, remitente y destinatario, depuración de datos, cierre del navegador)",
+    "deposito": "Ejecución",
+    "inicio": "04/09/2026",
+    "fin": "04/09/2026",
+    "descripcion": "Endpoint para disparar el scraping y guardar el resultado; ejecución del flujo completo desde la API; historial completo o solo el último movimiento de una guía en un mismo endpoint; datos de remitente y destinatario; depuración de datos innecesarios y cierre automático del navegador.\nJira: SERVITEL-5304, 5323, 5357, 5358, 5359, 5360, 5361, 5362. Sprint 23.",
+    "estado": "Completado"
+  },
+  {
+    "titulo": "Documentación técnica (README, historial de cambios, reorganización y archivos de memoria)",
+    "deposito": "Planeacíon",
+    "inicio": "04/09/2026",
+    "fin": "01/10/2026",
+    "descripcion": "Actualización y reorganización de la documentación del proyecto, archivos de memoria, README actualizado e historial de cambios (CAMBIOS.md).\nJira: SERVITEL-5322, 5370, 5383, 5445, 5936. Sprints 23 a 25.",
+    "estado": "Completado"
+  },
+  {
+    "titulo": "Control de versiones en GitHub",
+    "deposito": "Ejecución",
+    "inicio": "07/09/2026",
+    "fin": "07/09/2026",
+    "descripcion": "Creación del repositorio y carga del proyecto a GitHub.\nJira: SERVITEL-5385. Sprint 23.",
+    "estado": "Completado"
+  },
+  {
+    "titulo": "Arquitectura para concurrencia (separación visual/headless, migración a grid sin interfaz)",
+    "deposito": "Planeacíon",
+    "inicio": "07/09/2026",
+    "fin": "09/09/2026",
+    "descripcion": "Segmentación del trabajo entre consumo visual y consumo sin interfaz con soporte de múltiples llamadas; separación de navegador visual y headless; migración de la API a un grid sin interfaz.\nJira: SERVITEL-5384, 5438, 5439. Sprint 23.",
+    "estado": "Completado"
+  },
+  {
+    "titulo": "Optimización de recursos (corridas, memoria, telemetría, caché, arranque y tope de concurrencia)",
+    "deposito": "Ejecución",
+    "inicio": "07/09/2026",
+    "fin": "09/09/2026",
+    "descripcion": "Depuración del proyecto y corrección de bugs y código duplicado; optimización de las corridas de scraping; reducción de memoria, telemetría y caché del navegador headless; espaciado del arranque entre sesiones y ajuste del tope de concurrencia.\nJira: SERVITEL-5382, 5386, 5387, 5440, 5450, 5452, 5458. Sprint 23.",
+    "estado": "Completado"
+  },
+  {
+    "titulo": "Pruebas de carga y proyección de capacidad",
+    "deposito": "Ejecución",
+    "inicio": "09/09/2026",
+    "fin": "10/09/2026",
+    "descripcion": "Medición base de consumo y de memoria por sesión; pruebas de carga y barrido de concurrencia de 2 a 50 llamadas; proyección de capacidad de servidor para 100 usuarios; evaluación de estrategias para repartir la carga y prueba comparativa previa al barrido optimizado. También se corrigieron las consultas de guías sin movimientos.\nJira: SERVITEL-5388, 5441, 5442, 5443, 5446, 5448, 5449, 5451, 5482, 5483. Sprint 23.",
+    "estado": "Completado"
+  },
+  {
+    "titulo": "Limpieza de dependencias y actualización de versiones",
+    "deposito": "Ejecución",
+    "inicio": "09/09/2026",
+    "fin": "21/09/2026",
+    "descripcion": "Limpieza de dependencias y código heredado, y actualización de versiones del proyecto.\nJira: SERVITEL-5444, 5638. Sprints 23 y 24.",
+    "estado": "Completado"
+  },
+  {
+    "titulo": "Monitoreo mediante logs desde el servidor",
+    "deposito": "Ejecución",
+    "inicio": "14/09/2026",
+    "fin": "28/09/2026",
+    "descripcion": "Actualización de logs para seguimiento activo desde el servidor y creación del seguimiento por logs.\nJira: SERVITEL-5516, 5798. Sprints 23 a 25.",
+    "estado": "Completado"
+  },
+  {
+    "titulo": "Flujo de gestión de tareas y su endpoint",
+    "deposito": "Ejecución",
+    "inicio": "21/09/2026",
+    "fin": "21/09/2026",
+    "descripcion": "Configuración del nuevo flujo, creación y corrección del flujo de tareas y su endpoint.\nJira: SERVITEL-5634, 5640, 5641, 5642. Sprint 24.",
+    "estado": "Completado"
+  },
+  {
+    "titulo": "Despliegue en Portainer con pruebas funcionales",
+    "deposito": "Entrega de Proyecto",
+    "inicio": "22/09/2026",
+    "fin": "23/09/2026",
+    "descripcion": "Subida del proyecto a Portainer y pruebas funcionales del proyecto de trazabilidad desplegado.\nJira: SERVITEL-5669, 5703. Sprint 24.",
+    "estado": "Completado"
+  },
+  {
+    "titulo": "Menú de consola de operación",
+    "deposito": "Diseño",
+    "inicio": "28/09/2026",
+    "fin": "01/10/2026",
+    "descripcion": "Menú de consola con opciones de ejecución, levantamiento, estado del sistema y revisión de logs; agilización para levantar sin reconstruir y usar datos de prueba (menu.sh).\nJira: SERVITEL-5794, 5795, 5796, 5797, 5935. Sprints 24 y 25.",
+    "estado": "Completado"
+  },
+  {
+    "titulo": "Planificación del proyecto (cronograma)",
+    "deposito": "Planeacíon",
+    "inicio": "30/09/2026",
+    "fin": "30/09/2026",
+    "descripcion": "Cronograma del proyecto con actividades, fases y fechas estimadas de entrega.\nJira: SERVITEL-5889. Sprint 25.",
+    "estado": "Completado"
+  },
+  {
+    "titulo": "Levantamiento de requerimientos y definición del alcance",
+    "deposito": "Planeacíon",
+    "inicio": "30/09/2026",
+    "fin": "01/10/2026",
+    "descripcion": "Levantamiento de requerimientos, documento de requerimientos y documento de levantamiento de información con el alcance funcional.\nJira: SERVITEL-5890, 5937. Sprint 25.",
+    "estado": "Completado"
+  },
+  {
+    "titulo": "Diseño de la base de datos de trazabilidad y su documentación",
+    "deposito": "Planeacíon",
+    "inicio": "30/09/2026",
+    "fin": "01/10/2026",
+    "descripcion": "Diseño de entidades y relaciones para almacenar la trazabilidad y documento de la estructura de datos (tablas, campos y relaciones).\nJira: SERVITEL-5891, 5938. Sprint 25.",
+    "estado": "Completado"
+  },
+  {
+    "titulo": "Formatos de entrega (configuración de entorno y formato de pruebas)",
+    "deposito": "Entrega de Proyecto",
+    "inicio": "01/10/2026",
+    "fin": "01/10/2026",
+    "descripcion": "Formato de configuración de entorno para replicar la instalación y formato de pruebas con los casos y sus resultados.\nJira: SERVITEL-5939, 5940. Sprint 25.",
+    "estado": "Completado"
+  },
+  {
+    "titulo": "Reestructuración multisitio (núcleo compartido, endpoints por sitio y verificación)",
+    "deposito": "Ejecución",
+    "inicio": "02/10/2026",
+    "fin": "02/10/2026",
+    "descripcion": "Código reorganizado en un núcleo compartido (nucleo/) y scrapers por sitio (scrapers/servientrega/); endpoints separados por sitio con el nombre del sitio en las rutas; verificación de API, CLI, menú y Docker tras el cambio.\nJira: SERVITEL-5958, 5959, 5960. Sprint 25.",
+    "estado": "Completado"
+  },
+  {
+    "titulo": "Manual de operación y transferencia de conocimiento al equipo",
+    "deposito": "Entrega de Proyecto",
+    "inicio": "06/10/2026",
+    "fin": "08/10/2026",
+    "descripcion": "Redactar el manual de operación (levantar, detener, revisar logs, resolver fallos comunes) y hacer la transferencia de conocimiento al equipo que continúa el proyecto. Fase: cierre.",
+    "estado": "No iniciado"
+  },
+  {
+    "titulo": "Informe final y cierre de la épica SERVITEL-5484",
+    "deposito": "Entrega de Proyecto",
+    "inicio": "08/10/2026",
+    "fin": "08/10/2026",
+    "descripcion": "Preparar el informe final con lo entregado y lo pendiente, y cerrar la épica SERVITEL-5484 en Jira. Fase: cierre.",
+    "estado": "No iniciado"
+  },
+  {
+    "titulo": "Validación formal con el formato de pruebas",
+    "deposito": "Entrega de Proyecto",
+    "inicio": "13/10/2026",
+    "fin": "16/10/2026",
+    "descripcion": "Ejecutar los casos del formato de pruebas sobre el entorno de pruebas y registrar resultados y evidencias. Fase: pruebas.",
+    "estado": "No iniciado"
+  },
+  {
+    "titulo": "Implementación de la base de datos de trazabilidad",
+    "deposito": "Ejecución",
+    "inicio": "13/10/2026",
+    "fin": "23/10/2026",
+    "descripcion": "Implementar en el proyecto la base de datos diseñada para almacenar la trazabilidad de las guías consultadas. Fase: desarrollo.",
+    "estado": "No iniciado"
+  },
+  {
+    "titulo": "Pruebas de aceptación con el área usuaria",
+    "deposito": "Entrega de Proyecto",
+    "inicio": "19/10/2026",
+    "fin": "23/10/2026",
+    "descripcion": "Validar el servicio con el área usuaria sobre casos reales y recoger los ajustes solicitados. Fase: pruebas.",
+    "estado": "No iniciado"
+  },
+  {
+    "titulo": "Integración con consumidores finales (p. ej. Vapi)",
+    "deposito": "Ejecución",
+    "inicio": "26/10/2026",
+    "fin": "06/11/2026",
+    "descripcion": "Conectar la API de trazabilidad con los sistemas que la consumen, por ejemplo el flujo de Vapi, y validar la respuesta de extremo a extremo. Fase: desarrollo.",
+    "estado": "No iniciado"
+  },
+  {
+    "titulo": "Pruebas automatizadas de integración y regresión en CI/CD",
+    "deposito": "Ejecución",
+    "inicio": "26/10/2026",
+    "fin": "06/11/2026",
+    "descripcion": "Crear pruebas automatizadas de integración y regresión y ejecutarlas en el pipeline de CI/CD. Fase: pruebas.",
+    "estado": "No iniciado"
+  },
+  {
+    "titulo": "Incorporación de nuevos sitios o transportadoras al núcleo",
+    "deposito": "Ejecución",
+    "inicio": "26/10/2026",
+    "fin": "13/11/2026",
+    "descripcion": "Agregar nuevos sitios o transportadoras como scrapers sobre el núcleo compartido, con sus endpoints propios. Fase: desarrollo.",
+    "estado": "No iniciado"
+  },
+  {
+    "titulo": "Endurecimiento de seguridad (llaves, secretos, límites de peticiones)",
+    "deposito": "Entrega de Proyecto",
+    "inicio": "09/11/2026",
+    "fin": "13/11/2026",
+    "descripcion": "Rotación y gestión de llaves y secretos, y límites de peticiones en la API antes del paso a producción. Fase: despliegue.",
+    "estado": "No iniciado"
+  },
+  {
+    "titulo": "Aprovisionamiento del servidor según la proyección de capacidad",
+    "deposito": "Entrega de Proyecto",
+    "inicio": "09/11/2026",
+    "fin": "13/11/2026",
+    "descripcion": "Aprovisionar el servidor de producción con los recursos de la proyección de capacidad (100 solicitudes simultáneas). Fase: despliegue.",
+    "estado": "No iniciado"
+  },
+  {
+    "titulo": "Paso a producción con plan de rollback",
+    "deposito": "Entrega de Proyecto",
+    "inicio": "16/11/2026",
+    "fin": "20/11/2026",
+    "descripcion": "Desplegar en producción con un plan de rollback documentado y probado. Fase: despliegue.",
+    "estado": "No iniciado"
+  },
+  {
+    "titulo": "Alertas ante cambios en el sitio y en el captcha",
+    "deposito": "Ejecución",
+    "inicio": "23/11/2026",
+    "descripcion": "Configurar alertas que avisen cuando el sitio o el captcha cambien y fallen las consultas. Tarea continua. Fase: mantenimiento.",
+    "estado": "No iniciado"
+  },
+  {
+    "titulo": "Actualización periódica de selectores, dependencias y registros del captcha",
+    "deposito": "Ejecución",
+    "inicio": "23/11/2026",
+    "descripcion": "Revisar y actualizar periódicamente los selectores del scraper, las dependencias y los registros del captcha. Tarea continua. Fase: mantenimiento.",
+    "estado": "No iniciado"
+  },
+  {
+    "titulo": "Métricas del servicio (tiempo de respuesta, tasa de éxito, recursos)",
+    "deposito": "Ejecución",
+    "inicio": "23/11/2026",
+    "descripcion": "Medir y publicar tiempo de respuesta, tasa de éxito y consumo de recursos del servicio. Tarea continua. Fase: mantenimiento.",
+    "estado": "No iniciado"
+  }
+]

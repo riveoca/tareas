@@ -1,0 +1,83 @@
+[
+  {
+    "titulo": "Validación de autenticación y llave de acceso de la API",
+    "deposito": "Entrega de Proyecto",
+    "inicio": "09/10/2026",
+    "fin": "09/10/2026",
+    "descripcion": "Comprobar en el entorno desplegado que el login automatizado entra al sitio y detecta bien el éxito o el fallo, que los endpoints rechazan peticiones sin llave o con llave inválida y que el filtro de verificación de identidad responde como se espera.\nRegistrar cada caso en el formato de pruebas.\nValida: SERVITEL-5299, 5300, 5302, 5305, 5324, 5363.",
+    "estado": "No iniciado",
+    "responsable": "Iker Santiago Rivera Ocampo"
+  },
+  {
+    "titulo": "Validación de la resolución automática del captcha",
+    "deposito": "Entrega de Proyecto",
+    "inicio": "09/10/2026",
+    "fin": "09/10/2026",
+    "descripcion": "Lanzar una serie de consultas reales y medir cuántas veces se resuelve la verificación por imagen al primer intento, cómo se comporta cuando falla (reintento o error claro) y que los registros base de imágenes estén cargados.\nDejar la tasa de acierto en el formato de pruebas.\nValida: SERVITEL-5325, 5326.",
+    "estado": "No iniciado",
+    "responsable": "Iker Santiago Rivera Ocampo"
+  },
+  {
+    "titulo": "Validación de los endpoints de consulta de guías contra el sitio de Servientrega",
+    "deposito": "Entrega de Proyecto",
+    "inicio": "13/10/2026",
+    "fin": "13/10/2026",
+    "descripcion": "Con un grupo de guías reales, comparar la respuesta de la API con lo que muestra el sitio: historial completo, último movimiento, remitente y destinatario. Incluir guías sin movimientos y guías inexistentes, revisar que se depuran los datos innecesarios, que el navegador se cierra al terminar y que las rutas llevan el nombre del sitio tras la reestructuración multisitio.\nValida: SERVITEL-5304, 5323, 5357 a 5362, 5388, 5441, 5959.",
+    "estado": "No iniciado",
+    "responsable": "Iker Santiago Rivera Ocampo"
+  },
+  {
+    "titulo": "Validación del despliegue replicando la instalación con el formato de configuración de entorno",
+    "deposito": "Entrega de Proyecto",
+    "inicio": "13/10/2026",
+    "fin": "14/10/2026",
+    "descripcion": "Levantar el proyecto desde cero siguiendo solo el formato de configuración de entorno (variables, contenedor, URL y credenciales) y confirmar que queda funcionando igual que en Portainer y que no choca con otros contenedores.\nAnotar en el formato cualquier paso que falte o no esté claro.\nValida: SERVITEL-5291, 5298, 5301, 5303, 5669, 5703, 5939.",
+    "estado": "No iniciado",
+    "responsable": "Iker Santiago Rivera Ocampo"
+  },
+  {
+    "titulo": "Validación de concurrencia y capacidad en el entorno desplegado",
+    "deposito": "Entrega de Proyecto",
+    "inicio": "14/10/2026",
+    "fin": "15/10/2026",
+    "descripcion": "Repetir en el servidor desplegado una prueba de carga con el tope de concurrencia ajustado y comparar memoria por sesión, tiempos de respuesta y errores con las mediciones del sprint 23 y con la proyección de capacidad para 100 solicitudes simultáneas.\nEl resultado sirve de base para el aprovisionamiento del servidor de producción.\nValida: SERVITEL-5438 a 5443, 5446, 5448 a 5452, 5458.",
+    "estado": "No iniciado",
+    "responsable": "Iker Santiago Rivera Ocampo"
+  },
+  {
+    "titulo": "Validación del menú de operación y del monitoreo por logs",
+    "deposito": "Entrega de Proyecto",
+    "inicio": "15/10/2026",
+    "fin": "15/10/2026",
+    "descripcion": "Recorrer cada opción del menú de consola (ejecución, levantamiento sin reconstruir, datos de prueba, estado del sistema y revisión de logs) y comprobar que los logs del servidor registran las consultas y los errores para hacer seguimiento.\nValida: SERVITEL-5516, 5794 a 5798, 5935.",
+    "estado": "No iniciado",
+    "responsable": "Iker Santiago Rivera Ocampo"
+  },
+  {
+    "titulo": "Validación del cumplimiento de requerimientos (cada requisito con su caso de prueba)",
+    "deposito": "Entrega de Proyecto",
+    "inicio": "16/10/2026",
+    "fin": "16/10/2026",
+    "descripcion": "Cruzar el documento de requerimientos y de levantamiento de información con los resultados del formato de pruebas: cada requisito debe tener al menos un caso ejecutado y aprobado. Los que no se cumplan quedan como pendientes para las pruebas de aceptación con el área usuaria.\nValida: SERVITEL-5890, 5937, 5940.",
+    "estado": "No iniciado",
+    "responsable": "Iker Santiago Rivera Ocampo"
+  },
+  {
+    "titulo": "Validación de la base de datos implementada contra el documento de diseño",
+    "deposito": "Entrega de Proyecto",
+    "inicio": "26/10/2026",
+    "fin": "27/10/2026",
+    "descripcion": "Revisar que las tablas, campos y relaciones implementadas coinciden con el documento de base de datos y que la trazabilidad de las guías consultadas se guarda completa y sin duplicados.\nValida: SERVITEL-5891, 5938 y la tarea «Implementación de la base de datos de trazabilidad».",
+    "estado": "No iniciado",
+    "responsable": "Iker Santiago Rivera Ocampo"
+  },
+  {
+    "titulo": "Validación posterior al paso a producción (prueba de humo)",
+    "deposito": "Entrega de Proyecto",
+    "inicio": "20/11/2026",
+    "fin": "20/11/2026",
+    "descripcion": "Justo después del despliegue en producción, ejecutar un conjunto corto de consultas reales (login, captcha, historial y último movimiento) y revisar los logs. Si algo falla, aplicar el plan de rollback.\nValida: la tarea «Paso a producción con plan de rollback».",
+    "estado": "No iniciado",
+    "responsable": "Iker Santiago Rivera Ocampo"
+  }
+]

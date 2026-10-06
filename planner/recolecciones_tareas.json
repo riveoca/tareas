@@ -1,0 +1,38 @@
+[
+  {
+    "titulo": "Integración del flujo de recolecciones (navegación hasta Srv. Datos, tipo de cliente y mapeo de campos)",
+    "deposito": "Ejecución",
+    "inicio": "05/10/2026",
+    "fin": "05/10/2026",
+    "descripcion": "Nuevo flujo de recolecciones en el scraper de Servientrega: login → Atención Cliente NET > PROCESOS > 01-Registro llamada → Srv. Datos, con selección del tipo de cliente (crédito, interno, punto de servicio, persona natural) y opción en el CLI (--recolecciones, --tipo-cliente).\nMapeo de los campos de Srv. Datos por tipo de cliente, documentado en docs/contexto-proyecto.md.\nJira: SERVITEL-6005, 6006. Sprint 25.",
+    "estado": "Completado",
+    "responsable": "Iker Santiago Rivera Ocampo"
+  },
+  {
+    "titulo": "Endpoint de recolecciones en la API",
+    "deposito": "Ejecución",
+    "inicio": "07/10/2026",
+    "fin": "08/10/2026",
+    "descripcion": "Exponer el flujo de recolecciones en la API como los de guías y tareas: ruta con el nombre del sitio, protegida con la llave de acceso, con tipo de cliente como parámetro, marcada con el sitio en los logs y respetando el tope de concurrencia por sitio.\nAgregar la opción al menú de operación y actualizar la documentación.",
+    "estado": "No iniciado",
+    "responsable": "Iker Santiago Rivera Ocampo"
+  },
+  {
+    "titulo": "Diligenciamiento de los datos de recolección por tipo de cliente y solicitud del servicio",
+    "deposito": "Ejecución",
+    "inicio": "08/10/2026",
+    "fin": "09/10/2026",
+    "descripcion": "Usar el mapeo de Srv. Datos para llenar los campos de cada tipo de cliente (búsqueda por identificación, ciudad, cédula o código de cliente) y leer los datos que devuelve el sitio.\nEl botón «Pedir Servicios» probablemente crea una solicitud real: antes de automatizarlo, acordar con el área cómo probarlo sin generar recolecciones reales.",
+    "estado": "No iniciado",
+    "responsable": "Iker Santiago Rivera Ocampo"
+  },
+  {
+    "titulo": "Validación del flujo de recolecciones contra el sitio de Servientrega",
+    "deposito": "Entrega de Proyecto",
+    "inicio": "14/10/2026",
+    "fin": "14/10/2026",
+    "descripcion": "Probar el endpoint de recolecciones con los 4 tipos de cliente y comparar con lo que muestra el sitio: navegación hasta Srv. Datos, campos llenados, datos leídos, errores (cliente inexistente, sesión caída) y logs con el sitio.\nRegistrar los casos en el formato de pruebas.\nValida: SERVITEL-6005, 6006 y las tareas «Endpoint de recolecciones en la API» y «Diligenciamiento de los datos de recolección…».",
+    "estado": "No iniciado",
+    "responsable": "Iker Santiago Rivera Ocampo"
+  }
+]
