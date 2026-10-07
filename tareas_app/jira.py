@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import time
 from collections import defaultdict
+from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone
 from zoneinfo import ZoneInfo
 
@@ -222,6 +223,105 @@ class JiraClient:
                 "planned_end": real(end), "now": real(now), "finished": bool(d.get("completeTime")),
                 "field": (d.get("statisticField") or {}).get("name", "Puntos de historia"),
                 "assignee": assignee, "start_scope": base["scope"], "closed_before": base["closed"], "events": events}
+
+    def performance(self) -> dict:
+        """Histórico de todos los sprints (cerrados y activo) para el desempeño individual comparado.
+        Cada incidencia hecha (sin épicas) cuenta en el último sprint en que estuvo; si nunca tuvo sprint, en el
+        sprint cuyo periodo contiene su fecha de resolución. Devuelve por persona y sprint puntos y tareas cerradas."""
+        boards = [b for b in self._agile("GET", "/board", params={"projectKeyOrId": self.project}).get("values", [])
+                  if b.get("type") != "kanban"]
+        sprints: dict[int, dict] = {}
+        for b in boards:
+            start = 0
+            try:
+                while True:
+                    page = self._agile("GET", f"/board/{b['id']}/sprint", params={"startAt": start, "maxResults": 50})
+                    for s in page.get("values", []):
+                        if s.get("state") == "future" or not s.get("startDate"):
+                            continue
+                        sprints[s["id"]] = {"id": s["id"], "name": s["name"], "state": s.get("state"),
+                                            "start": _dt(s["startDate"]).date().isoformat(),
+                                            "end": _dt(s.get("completeDate") or s["endDate"]).date().isoformat()}
+                    if page.get("isLast", True):
+                        break
+                    start += 50
+            except JiraError:
+                continue
+        order = sorted(sprints.values(), key=lambda s: (s["start"], s["id"]))
+        pos = {s["id"]: n for n, s in enumerate(order)}
+
+        sp = self.story_points_field()
+        if self._fields is None:
+            self._fields = self._request("GET", "/field")
+        sprint_field = next((f["id"] for f in self._fields
+                             if (f.get("schema") or {}).get("custom") == "com.pyxis.greenhopper.jira:gh-sprint"), None)
+        epic_types = [t["id"] for t in self.issue_types() if t["level"] == 1]
+        jql = f'project = "{self.project}"'
+        if epic_types:
+            jql += f" AND issuetype not in ({', '.join(epic_types)})"
+        fields = ["assignee", "status", "resolutiondate", "parent"] + [f for f in (sp, sprint_field) if f]
+        rows: dict[tuple, dict] = defaultdict(lambda: {"points": 0.0, "tasks": 0, "epics": {}})
+        open_: dict[str, dict] = defaultdict(lambda: {"points": 0.0, "tasks": 0})
+        outside: dict[str, dict] = defaultdict(lambda: {"points": 0.0, "tasks": 0})
+        # Tramos por fecha de creación (cada 3 sprints) leídos en paralelo: recorrer todo el proyecto es lento
+        cuts = [s["start"] for s in order[::3]][1:]
+        ranges = [(a, b) for a, b in zip([None] + cuts, cuts + [None])]
+
+        def fetch(rng):
+            a, b = rng
+            q = jql + (f' AND created >= "{a}"' if a else "") + (f' AND created < "{b}"' if b else "")
+            out, token = [], None
+            while len(out) < 20000:
+                body = {"jql": q + " ORDER BY created ASC", "maxResults": 100, "fields": fields}
+                if token:
+                    body["nextPageToken"] = token
+                page = self._request("POST", "/search/jql", json=body)
+                out += page.get("issues", [])
+                token = page.get("nextPageToken")
+                if not token or page.get("isLast", True):
+                    return out
+            return out
+
+        with ThreadPoolExecutor(max_workers=8) as pool:
+            issues = [i for chunk in pool.map(fetch, ranges) for i in chunk]
+        for i in issues:
+            f = i["fields"]
+            who = (f.get("assignee") or {}).get("displayName") or "Sin responsable"
+            pts = float(f.get(sp) or 0) if sp else 0.0
+            if ((f.get("status") or {}).get("statusCategory") or {}).get("key") != "done":
+                open_[who]["points"] += pts
+                open_[who]["tasks"] += 1
+                continue
+            ids = [s["id"] for s in (f.get(sprint_field) or []) if s.get("id") in pos] if sprint_field else []
+            sid = max(ids, key=pos.get) if ids else None
+            if sid is None and f.get("resolutiondate"):
+                day = _dt(f["resolutiondate"]).date().isoformat()
+                sid = next((s["id"] for s in order if s["start"] <= day <= s["end"]), None)
+            if sid is None:
+                outside[who]["points"] += pts
+                outside[who]["tasks"] += 1
+                continue
+            # Proyecto = épica padre (las subtareas cuelgan de una tarea, no de la épica)
+            par = f.get("parent") or {}
+            level = (((par.get("fields") or {}).get("issuetype") or {}).get("hierarchyLevel"))
+            epic = (par.get("fields") or {}).get("summary") if level == 1 else None
+            r = rows[(who, sid)]
+            r["points"] += pts
+            r["tasks"] += 1
+            e = r["epics"].setdefault(epic or "Sin épica", {"points": 0.0, "tasks": 0})
+            e["points"] += pts
+            e["tasks"] += 1
+        people = sorted({w for w, _ in rows} | set(outside) | set(open_))
+        return {
+            "sprints": order,
+            "field": next((f.get("name") for f in self._fields if f["id"] == sp), "Puntos de historia"),
+            "people": [{"name": w,
+                        "by_sprint": {str(s): rows[(w, s)] for (ww, s) in list(rows) if ww == w},
+                        "outside": outside.get(w, {"points": 0.0, "tasks": 0}),
+                        "open": open_.get(w, {"points": 0.0, "tasks": 0})} for w in people],
+            "issues": len(issues),
+            "generated": datetime.now(timezone.utc).isoformat(),
+        }
 
     def _field_by_name(self, configured: str, names: tuple[str, ...]) -> str | None:
         if configured:

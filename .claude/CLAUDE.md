@@ -23,6 +23,10 @@ textos de la app en español.
   Debajo, el mismo informe personal (`?assignee=<nombre>`, por defecto el usuario de Jira) solo con sus tareas asignadas hoy.
   El eje va del inicio al fin previsto; si el sprint sigue abierto después (o se cerró tarde), se alarga hasta hoy / el cierre y tareas creadas por día hábil
   (`GET /api/sprint/{id}/issues` → `JiraClient.sprint_issues`).
+  Al final, apartado plegado "Desempeño histórico individual" que solo carga al abrirlo (`GET /api/performance` →
+  `JiraClient.performance`, consultas en paralelo por tramos de fecha, caché 10 min en `server.py`): todos se comparan
+  por media por sprint y solo en los sprints cerrados de la persona elegida (decisión del usuario: llevar más sprints no da ventaja). Incluye tendencia
+  (últimos 3 vs 3 anteriores) y reparto por épica (`by_sprint[id].epics`).
 
 ## Reglas de negocio (decididas por el usuario)
 - En Jira cada tarea lleva solo su épica como padre; **no se envían etiquetas**.

@@ -115,6 +115,16 @@
   .legend i.dash { background: repeating-linear-gradient(90deg, var(--muted) 0 6px, transparent 6px 10px); }
   .day-table td, .day-table th { padding: 3px 12px 3px 0; font-variant-numeric: tabular-nums; }
 
+  .perf > summary { list-style: none; cursor: pointer; display: flex; align-items: center; gap: 10px; padding: 10px 14px; flex-wrap: wrap; }
+  .perf > summary::-webkit-details-marker { display: none; }
+  .perf > summary::before { content: '▸'; color: var(--muted); }
+  .perf[open] > summary::before { content: '▾'; }
+  .perf[open] > summary { border-bottom: 1px solid var(--border); }
+  .tile .d { font-size: 12px; margin-top: 2px; }
+  .perf-table td, .perf-table th { padding: 4px 14px 4px 0; font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .perf-table td.n, .perf-table th.n { text-align: right; }
+  .perf-table tr.me td { background: var(--accent-soft); font-weight: 600; }
+
   @media (max-width: 700px) {
     .topbar, main { padding-left: 16px; padding-right: 16px; }
     .two, .detail-grid { grid-template-columns: 1fr; }
@@ -154,6 +164,22 @@
       </div>
     </div>
     <div class="card-body" id="spBody"><div class="empty">Cargando…</div></div>
+  </section>
+  <section class="card">
+    <details class="perf" id="perfBox" ontoggle="if (this.open) loadPerformance()">
+      <summary><h2 style="font-size:15px;margin:0">🏅 Desempeño histórico individual</h2>
+        <span class="muted">comparado con el equipo en los mismos sprints · se carga solo al abrirlo (unos segundos)</span></summary>
+      <div class="card-head" style="border-bottom:none;padding-bottom:0">
+        <div class="filters">
+          <select id="pfUser" onchange="renderPerformance()"></select>
+          <select id="pfMetric" onchange="renderPerformance()"><option value="points">Medir por puntos</option><option value="tasks">Medir por tareas</option></select>
+          <select id="pfRange" onchange="renderPerformance()"><option value="0">Todo el histórico</option><option value="6">Últimos 6 sprints</option><option value="3">Últimos 3 sprints</option></select>
+          <button class="ghost" onclick="loadPerformance(true)" title="Volver a leer de Jira">↻</button>
+        </div>
+        <span class="spacer"></span><span class="muted" id="pfInfo"></span>
+      </div>
+      <div class="card-body" id="pfBody"></div>
+    </details>
   </section>
 </main>
 
@@ -991,7 +1017,247 @@ function drawBurnup(b, id) {
     <tr><td>${fmtHora(b.start)}</td><td>Inicio del sprint</td><td></td><td>0</td><td>${num(b.start_scope)}</td></tr>${rows.join('')}</table>`;
 }
 
-let spResize; window.addEventListener('resize', () => { clearTimeout(spResize); spResize = setTimeout(() => { if (!$('sprintView').hidden) renderSprintChart(); }, 150); });
+// ---------- Desempeño histórico individual ----------
+// Solo se pide a Jira al abrir el apartado (recorre todo el proyecto); el servidor lo guarda 10 minutos.
+let pfData = null, pfBusy = false;
+const NOBODY = 'Sin responsable';
+
+async function loadPerformance(refresh = false) {
+  if (!cfg?.jira) return $('pfBody').innerHTML = '<div class="empty">Conecta Jira para ver el desempeño.</div>';
+  if (pfBusy) return;
+  if (pfData && !refresh) return renderPerformance();
+  pfBusy = true;
+  $('pfBody').innerHTML = '<div class="empty"><span class="spinner"></span> Leyendo todo el histórico de Jira (todos los sprints)…</div>';
+  try { pfData = await api('/api/performance' + (refresh ? '?refresh=true' : '')); }
+  catch (e) { pfData = null; return $('pfBody').innerHTML = `<div class="note err">${esc(e.message)}</div>`; }
+  finally { pfBusy = false; }
+  const me = cfg.jira?.me, names = pfData.people.map(p => p.name).filter(n => n !== NOBODY);
+  const v = $('pfUser').value || me;
+  $('pfUser').innerHTML = names.map(n => `<option value="${esc(n)}">${esc(n)}${n === me ? ' (yo)' : ''}</option>`).join('');
+  $('pfUser').value = names.includes(v) ? v : names[0] || '';
+  renderPerformance();
+}
+
+// Cada persona está en el equipo desde su primer hasta su último sprint con algo cerrado (los sprints a 0 en medio
+// sí cuentan). Para que la comparación sea justa, todos se miden solo en los sprints cerrados en que estaba la persona
+// elegida: mismo periodo y mismo ritmo de equipo, sin ventaja para quien lleva más sprints.
+function perfStats(d, metric, lastN, who) {
+  const pos = new Map(d.sprints.map((s, i) => [s.id, i]));
+  const closed = d.sprints.filter(s => s.state === 'closed');
+  let period = lastN ? closed.slice(-lastN) : closed;
+  const people = d.people.filter(p => p.name !== NOBODY).map(p => {
+    const act = d.sprints.map((s, i) => p.by_sprint[s.id] ? i : -1).filter(i => i >= 0);
+    const first = act.length ? Math.min(...act) : Infinity, last = act.length ? Math.max(...act) : -1;
+    const v = (s) => p.by_sprint[s.id]?.[metric] || 0;
+    const inTeam = (s) => pos.get(s.id) >= first && (pos.get(s.id) <= last || s.state === 'active');
+    return { name: p.name, p, v, inTeam };
+  });
+  const sel = people.find(x => x.name === who);
+  if (sel) period = period.filter(sel.inTeam);
+  for (const x of people) {
+    const { p, v } = x, sp = period.filter(x.inTeam), vals = sp.map(v);
+    const total = vals.reduce((a, b) => a + b, 0), pts = sp.reduce((a, s) => a + (p.by_sprint[s.id]?.points || 0), 0);
+    const tasks = sp.reduce((a, s) => a + (p.by_sprint[s.id]?.tasks || 0), 0);
+    const bi = vals.indexOf(Math.max(...vals));
+    Object.assign(x, { sprints: sp, total, avg: sp.length ? total / sp.length : null,
+                       best: sp.length ? { s: sp[bi], v: vals[bi] } : null, perTask: tasks ? pts / tasks : null, open: p.open[metric] });
+  }
+  // Por sprint: valor de cada persona que estaba en el equipo
+  const perSprint = (s) => people.filter(x => x.inTeam(s)).map(x => ({ name: x.name, v: x.v(s) }));
+  // Cada uno frente al resto del equipo en sus mismos sprints (media por persona y sprint de los demás)
+  for (const x of people) {
+    let sum = 0, n = 0, team = 0;
+    for (const s of x.sprints) for (const o of perSprint(s)) { team += o.v; if (o.name !== x.name) { sum += o.v; n++; } }
+    x.rest = n ? sum / n : null; x.diff = x.rest ? (x.avg - x.rest) / x.rest * 100 : null; x.share = team ? x.total / team * 100 : 0;
+    // Tendencia: media de los últimos sprints frente a la de los anteriores (mismo número, hasta 3)
+    x.trend = trendOf(x.sprints.map(x.v));
+    x.restTrend = trendOf(x.sprints.map(s => { const o = perSprint(s).filter(o => o.name !== x.name); return o.length ? o.reduce((a, b) => a + b.v, 0) / o.length : 0; }));
+    // Reparto por proyecto (épica) en esos sprints
+    x.epics = {};
+    for (const s of x.sprints) for (const [e, v] of Object.entries(x.p.by_sprint[s.id]?.epics || {})) x.epics[e] = (x.epics[e] || 0) + v[metric];
+  }
+  // Total del equipo por proyecto en el periodo (lo que cerraron todos en esos sprints)
+  const teamEpics = {};
+  for (const x of people) for (const s of period) for (const [e, v] of Object.entries(x.p.by_sprint[s.id]?.epics || {})) teamEpics[e] = (teamEpics[e] || 0) + v[metric];
+  const ranked = people.filter(x => x.sprints.length).sort((a, b) => b.avg - a.avg);
+  return { people, ranked, period, perSprint, teamEpics, active: d.sprints.find(s => s.state === 'active') };
+}
+
+function trendOf(vals) {
+  const k = Math.min(3, Math.floor(vals.length / 2));
+  if (k < 2) return null;
+  const avg = (a) => a.reduce((x, y) => x + y, 0) / a.length;
+  const last = avg(vals.slice(-k)), prev = avg(vals.slice(-2 * k, -k));
+  return { k, last, prev, pct: prev ? (last - prev) / prev * 100 : null };
+}
+
+function renderPerformance() {
+  if (!pfData) return;
+  const who = $('pfUser').value, metric = $('pfMetric').value, lastN = Number($('pfRange').value);
+  const unit = metric === 'points' ? 'puntos' : 'tareas';
+  const st = perfStats(pfData, metric, lastN, who), me = st.people.find(x => x.name === who);
+  $('pfInfo').textContent = `${pfData.issues} incidencias · ${pfData.sprints.length} sprints · leído ${new Date(pfData.generated).toLocaleTimeString().slice(0, 5)}`;
+  if (!me || !me.sprints.length) return $('pfBody').innerHTML = `<div class="empty">${esc(who || 'Esta persona')} no tiene sprints cerrados en este periodo.</div>`;
+
+  const { rest, diff } = me, isMe = who === cfg.jira?.me, N = st.period.length;
+  const rank = st.ranked.findIndex(x => x.name === who) + 1;
+  const nowV = st.active && me.inTeam(st.active) ? me.v(st.active) : null;
+  const sg = (v) => `${v >= 0 ? '+' : '−'}${num(Math.abs(v))}`;
+
+  $('pfBody').innerHTML = `
+    <div class="tiles">
+      <div class="tile"><div class="v">${num(me.avg)}</div><div class="l">${unit} por sprint de media</div>
+        ${rest != null ? `<div class="d ${diff >= 0 ? 'ok' : 'warn'}">${diff >= 0 ? '▲' : '▼'} ${sg(diff)} % vs resto del equipo (${num(rest)})</div>` : ''}</div>
+      <div class="tile"><div class="v">${rank}º <span class="muted" style="font-size:14px">de ${st.ranked.length}</span></div><div class="l">posición por media de ${unit} por sprint en ${isMe ? 'tus' : 'sus'} mismos sprints</div></div>
+      <div class="tile"><div class="v">${num(me.total)}</div><div class="l">${unit} cerrados en ${me.sprints.length} sprints${lastN ? '' : ` (desde ${esc(st.period[0].name)})`}</div></div>
+      <div class="tile"><div class="v">${num(me.share)} %</div><div class="l">del total del equipo en esos sprints</div></div>
+      <div class="tile">${me.trend ? `<div class="v ${me.trend.pct == null ? '' : me.trend.pct >= 0 ? 'ok' : 'warn'}">${trendTxt(me.trend)}</div>
+        <div class="l">tendencia: últimos ${me.trend.k} sprints (${num(me.trend.last)}) vs ${me.trend.k} anteriores (${num(me.trend.prev)})</div>
+        ${me.restTrend ? `<div class="d muted">resto del equipo: ${trendTxt(me.restTrend)}</div>` : ''}`
+        : `<div class="v">–</div><div class="l">tendencia (hacen falta 4 sprints o más)</div>`}</div>
+      <div class="tile"><div class="v">${me.best ? num(me.best.v) : '–'}</div><div class="l">mejor sprint${me.best ? ` (${esc(me.best.s.name)})` : ''}</div></div>
+      ${nowV != null ? `<div class="tile"><div class="v">${num(nowV)}</div><div class="l">en el sprint en curso (${esc(st.active.name)})</div></div>` : ''}
+      <div class="tile"><div class="v">${num(me.open)}</div><div class="l">${unit} abiertos asignados</div></div>
+    </div>
+    <h3 class="chart-title" style="font-size:14px">${isMe ? 'Mis' : 'Sus'} ${unit} cerrados por sprint frente al equipo</h3>
+    <div class="legend" style="flex-wrap:wrap">
+      <span class="muted"><i style="background:var(--accent);height:9px;width:12px;border-radius:2px"></i>${esc(who)}</span>
+      <span class="muted"><i style="background:var(--guide-line)"></i>Media del resto del equipo por persona</span>
+      <span class="muted"><i style="background:var(--guide-line);opacity:.25;height:9px"></i>Mínimo–máximo del resto</span>
+    </div>
+    <div class="chart" id="pfSprints"></div>
+    <h3 class="chart-title" style="font-size:14px;margin-top:22px">Comparación: media de ${unit} por sprint <span class="muted" style="font-weight:400">· solo en los ${N} sprints cerrados en que estaba ${esc(who)} (${esc(st.period[0].name)} → ${esc(st.period[N - 1].name)})</span></h3>
+    <div class="chart" id="pfRank"></div>
+    <h3 class="chart-title" style="font-size:14px;margin-top:22px">Reparto por proyecto (épica) <span class="muted" style="font-weight:400">· en los mismos ${N} sprints</span></h3>
+    <div class="legend" style="flex-wrap:wrap">
+      <span class="muted"><i style="background:var(--accent);height:9px;width:12px;border-radius:2px"></i>% del trabajo de ${esc(who)}</span>
+      <span class="muted"><i style="background:var(--guide-line);opacity:.55;height:9px;width:12px;border-radius:2px"></i>% del trabajo de todo el equipo</span>
+    </div>
+    <div class="chart" id="pfEpics"></div>
+    <details style="margin-top:10px" open><summary class="muted" style="cursor:pointer">Tabla del equipo</summary><div class="table-wrap">
+      <table class="perf-table"><tr><th>#</th><th>Persona</th><th class="n" title="Sprints en común con ${esc(who)} en los que esta persona estaba en el equipo">Sprints en común</th><th class="n">${unit[0].toUpperCase() + unit.slice(1)} cerrados</th><th class="n">Media / sprint</th><th class="n" title="Frente a la media del resto del equipo en los mismos sprints">vs resto</th><th class="n">% del equipo</th><th class="n" title="Últimos sprints frente a los anteriores (hasta 3 y 3)">Tendencia</th><th class="n">Mejor sprint</th><th class="n">Puntos / tarea</th><th class="n">Abiertos</th></tr>
+      ${st.ranked.map((x, i) => `<tr class="${x.name === who ? 'me' : ''}"><td>${i + 1}</td><td>${esc(x.name)}${x.sprints.length < Math.min(3, N) ? ' <span class="muted" title="Menos de 3 sprints en común: comparación poco fiable">⚠ pocos datos</span>' : ''}</td>
+        <td class="n">${x.sprints.length} / ${N}</td><td class="n">${num(x.total)}</td><td class="n">${num(x.avg)}</td>
+        <td class="n ${x.diff == null ? '' : x.diff >= 0 ? 'ok' : 'warn'}">${x.diff == null ? '–' : sg(x.diff) + ' %'}</td><td class="n">${num(x.share)} %</td><td class="n ${x.trend?.pct == null ? '' : x.trend.pct >= 0 ? 'ok' : 'warn'}">${x.trend ? trendTxt(x.trend) : '–'}</td>
+        <td class="n">${x.best ? `${num(x.best.v)} <span class="muted">${esc(x.best.s.name)}</span>` : '–'}</td><td class="n">${x.perTask != null ? num(x.perTask) : '–'}</td><td class="n">${num(x.open)}</td></tr>`).join('')}
+      </table></div></details>
+    <p class="muted" style="margin:10px 0 0">Cómo se calcula: cada tarea cerrada (sin épicas) cuenta en el último sprint en el que estuvo y para quien la tiene asignada hoy.
+      Para que llevar más o menos sprints no dé ventaja, todas las cifras de la comparación (indicadores, ranking y tabla) usan solo los sprints cerrados en que estaba ${esc(who)}
+      y, de cada persona, los de esos sprints en que estaba en el equipo (de su primer a su último sprint con algo cerrado; los sprints a 0 en medio sí cuentan). Se compara la media por sprint, nunca el total acumulado. El sprint en curso se muestra pero no entra en las medias. «vs resto» compara a cada persona con la media de los demás en sus mismos sprints, y «% del equipo» es su parte de lo cerrado en esos sprints.
+      La tendencia compara la media de los últimos sprints con la de los anteriores (3 y 3, o menos si hay pocos). El proyecto es la épica de la tarea.</p>`;
+  drawPerfSprints(st, who, metric, lastN);
+  drawPerfRank(st, who, unit);
+  drawPerfEpics(st, who, unit);
+}
+
+const trendTxt = (t) => t.pct == null ? (t.last ? '▲ nuevo' : '=') : `${t.pct >= 0 ? '▲ +' : '▼ −'}${num(Math.abs(t.pct))} %`;
+
+// Proyectos de la persona: qué % de su trabajo va a cada uno frente al % del equipo, y su parte del proyecto
+function drawPerfEpics(st, who, unit) {
+  const box = $('pfEpics'), me = st.people.find(x => x.name === who), TOP = 8;
+  const mine = Object.values(me.epics).reduce((a, b) => a + b, 0), team = Object.values(st.teamEpics).reduce((a, b) => a + b, 0);
+  if (!mine) return box.innerHTML = '<div class="empty">Sin trabajo cerrado en estos sprints.</div>';
+  let rows = Object.entries(me.epics).filter(([, v]) => v > 0).sort((a, b) => b[1] - a[1]).map(([e, v]) => ({ e, v, t: st.teamEpics[e] || 0 }));
+  if (rows.length > TOP) {
+    const rest = rows.slice(TOP - 1);
+    rows = rows.slice(0, TOP - 1).concat([{ e: `Otros ${rest.length} proyectos`, v: rest.reduce((a, r) => a + r.v, 0), t: rest.reduce((a, r) => a + r.t, 0), other: true }]);
+  }
+  const W = Math.max(box.clientWidth, 300), narrow = W < 600, rh = narrow ? 50 : 38;
+  const lw = narrow ? 0 : Math.min(240, W * 0.3), m = { t: 4, r: narrow ? 56 : 230, b: 4 }, pw = W - lw - m.r;
+  const H = m.t + rows.length * rh + m.b;
+  const vmax = Math.max(...rows.map(r => Math.max(r.v / mine, r.t / team))) * 100, x = (pct) => lw + pw * pct / vmax;
+  const bar = (y0, pct, h, fill, op) => { const w = Math.max(0, x(pct) - lw), r = Math.min(3, w / 2, h / 2); return w ? `<path d="M${lw},${y0} h${w - r} q${r},0 ${r},${r} v${h - 2 * r} q0,${r} ${-r},${r} h${-(w - r)} Z" fill="${fill}" opacity="${op}"/>` : ''; };
+  let g = '';
+  rows.forEach((r, i) => {
+    const top = m.t + i * rh + (narrow ? 16 : 6), pm = r.v / mine * 100, pt = r.t / team * 100, part = r.t ? r.v / r.t * 100 : 0;
+    const name = esc(r.e.length > 34 ? r.e.slice(0, 34) + '…' : r.e), info = `${num(r.v)} ${unit}${r.other ? '' : ` · ${num(part)} % del proyecto`}`;
+    g += narrow ? `<text x="0" y="${top - 4}" style="fill:var(--text)">${name} <tspan style="fill:var(--muted)">· ${info}</tspan></text>`
+      : `<text x="${lw - 10}" y="${top + 13}" text-anchor="end" style="fill:var(--text)">${name}</text>`;
+    g += `<g><title>${esc(r.e)}: ${num(pm)} % del trabajo de ${esc(who)} (${num(r.v)} ${unit}) · ${num(pt)} % del equipo (${num(r.t)} ${unit})${r.other ? '' : ` · ${esc(who)} hizo el ${num(part)} % de este proyecto`}</title>
+      ${bar(top, pm, 12, 'var(--accent)', 1)}${bar(top + 14, pt, 10, 'var(--guide-line)', .55)}
+      <rect x="0" y="${top - 6}" width="${W}" height="${rh}" fill="transparent"/></g>`;
+    g += `<text x="${x(pm) + 6}" y="${top + 10}" style="fill:var(--text);font-weight:600">${num(pm)} %</text><text x="${x(pt) + 6}" y="${top + 23}">${num(pt)} %</text>`;
+    if (!narrow) g += `<text x="${W - m.r + 60}" y="${top + 16}" style="fill:var(--muted)">${info}</text>`;
+  });
+  box.innerHTML = `<svg viewBox="0 0 ${W} ${H}" height="${H}" role="img" aria-label="Reparto del trabajo por proyecto">${g}</svg>`;
+}
+
+function drawPerfSprints(st, who, metric, lastN) {
+  const box = $('pfSprints'), me = st.people.find(x => x.name === who);
+  const list = st.period.concat(st.active && me.inTeam(st.active) ? [st.active] : []);
+  const cols = list.map(s => {
+    const all = st.perSprint(s), others = all.filter(x => x.name !== who).map(x => x.v);
+    return { s, v: me.inTeam(s) ? me.v(s) : null, avg: others.length ? others.reduce((a, b) => a + b, 0) / others.length : null,
+             lo: others.length ? Math.min(...others) : null, hi: others.length ? Math.max(...others) : null,
+             all: all.sort((a, b) => b.v - a.v) };
+  });
+  const W = Math.max(box.clientWidth, 320), H = 280, m = { t: 14, r: 12, b: 42, l: 40 };
+  const pw = W - m.l - m.r, ph = H - m.t - m.b, cw = pw / cols.length, xs = cols.map((_, i) => m.l + cw * i + cw / 2);
+  const vmax = Math.max(1, ...cols.flatMap(c => [c.v, c.hi].filter(v => v != null)));
+  const step = [1, 2, 5, 10, 20, 25, 50, 100, 200, 500].find(s => vmax / s <= 5) || Math.ceil(vmax / 5);
+  const top = Math.ceil(vmax / step) * step, y = (v) => m.t + ph * (1 - v / top), y0 = y(0);
+  let g = '';
+  for (let v = 0; v <= top; v += step)
+    g += `<line x1="${m.l}" x2="${W - m.r}" y1="${y(v)}" y2="${y(v)}" stroke="var(--border)"/><text x="${m.l - 6}" y="${y(v) + 4}" text-anchor="end">${v}</text>`;
+  // Banda mínimo–máximo del resto del equipo
+  const band = cols.map((c, i) => ({ c, i })).filter(({ c }) => c.lo != null);
+  if (band.length > 1)
+    g += `<path d="M${band.map(({ c, i }) => `${xs[i]},${y(c.hi)}`).join(' L')} L${band.slice().reverse().map(({ c, i }) => `${xs[i]},${y(c.lo)}`).join(' L')} Z" fill="var(--guide-line)" opacity=".18"/>`;
+  const bw = Math.max(3, Math.min(28, cw - 6));
+  cols.forEach((c, i) => {
+    if (!c.v) return;
+    const h = y0 - y(c.v), r = Math.min(4, bw / 2, h);
+    g += `<path d="M${xs[i] - bw / 2},${y0} v${-(h - r)} q0,${-r} ${r},${-r} h${bw - 2 * r} q${r},0 ${r},${r} v${h - r} Z" fill="var(--accent)" ${c.s.state === 'active' ? 'opacity=".45"' : ''}/>`;
+  });
+  const line = cols.map((c, i) => ({ c, i })).filter(({ c }) => c.avg != null);
+  if (line.length) {
+    g += `<path d="M${line.map(({ c, i }) => `${xs[i]},${y(c.avg)}`).join(' L')}" fill="none" stroke="var(--guide-line)" stroke-width="2" stroke-linejoin="round"/>`;
+    line.forEach(({ c, i }) => { g += `<circle cx="${xs[i]}" cy="${y(c.avg)}" r="3.5" fill="var(--guide-line)" stroke="var(--panel)" stroke-width="2"/>`; });
+  }
+  const every = Math.ceil(cols.length / Math.max(1, Math.floor(pw / 52)));
+  cols.forEach((c, i) => {
+    if (i % every && i !== cols.length - 1) return;
+    g += `<text x="${xs[i]}" y="${H - m.b + 15}" text-anchor="middle">${esc(c.s.name.replace(/^Sprint\s*/i, 'S'))}</text>`;
+    g += `<text x="${xs[i]}" y="${H - m.b + 28}" text-anchor="middle">${c.s.state === 'active' ? 'en curso' : c.s.start.slice(5).split('-').reverse().join('/')}</text>`;
+  });
+  g += `<line class="cross" x1="0" x2="0" y1="${m.t}" y2="${y0}" stroke="var(--muted)" visibility="hidden"/>`;
+  const hit = cols.map((_, i) => `<rect x="${m.l + cw * i}" y="${m.t}" width="${cw}" height="${ph}" fill="transparent" data-i="${i}"/>`).join('');
+  box.innerHTML = `<svg viewBox="0 0 ${W} ${H}" height="${H}" role="img" aria-label="Desempeño por sprint frente al equipo">${g}${hit}</svg><div class="tip" hidden></div>`;
+  const tip = box.querySelector('.tip'), cross = box.querySelector('.cross');
+  box.querySelectorAll('rect[data-i]').forEach(r => {
+    const i = +r.dataset.i, c = cols[i];
+    r.onmouseenter = () => {
+      tip.innerHTML = `<div style="font-weight:600">${esc(c.s.name)}${c.s.state === 'active' ? ' (en curso)' : ''}</div><div class="muted">${fmtDate(c.s.start)} → ${fmtDate(c.s.end)}</div>` +
+        (c.v != null ? `<div><em style="background:var(--accent)"></em>${esc(who)}: <b>${num(c.v)}</b>${c.v ? ` · ${c.all.findIndex(x => x.name === who) + 1}º de ${c.all.length}` : ''}</div>` : `<div class="muted">${esc(who)} aún no estaba / ya no estaba</div>`) +
+        (c.avg != null ? `<div><em style="background:var(--guide-line)"></em>Media del resto: <b>${num(c.avg)}</b></div>` : '') +
+        `<div class="muted" style="margin-top:4px">${c.all.map(x => `<div>${x.name === who ? '<b>' : ''}${esc(x.name)}: ${num(x.v)}${x.name === who ? '</b>' : ''}</div>`).join('')}</div>`;
+      tip.hidden = false; cross.setAttribute('x1', xs[i]); cross.setAttribute('x2', xs[i]); cross.setAttribute('visibility', 'visible');
+      const left = xs[i] / W * box.clientWidth;
+      tip.style.top = '8px'; tip.style.left = (left > box.clientWidth / 2 ? left - tip.offsetWidth - 12 : left + 12) + 'px';
+    };
+    r.onmouseleave = () => { tip.hidden = true; cross.setAttribute('visibility', 'hidden'); };
+  });
+}
+
+function drawPerfRank(st, who, unit) {
+  // En pantallas estrechas el nombre va encima de la barra
+  const box = $('pfRank'), rows = st.ranked, sg = (v) => `${v >= 0 ? '+' : '−'}${num(Math.abs(v))}`;
+  const W = Math.max(box.clientWidth, 300), narrow = W < 600, rh = narrow ? 42 : 30;
+  const lw = narrow ? 0 : Math.min(220, W * 0.34), m = { t: 4, r: narrow ? 70 : 280, b: 6 };
+  const H = m.t + rows.length * rh + m.b, pw = W - lw - m.r;
+  const x = (v) => lw + pw * v / Math.max(1, ...rows.map(x => x.avg));
+  let g = '';
+  rows.forEach((p, i) => {
+    const cy = m.t + i * rh + rh / 2 + (narrow ? 8 : 0), w = Math.max(0, x(p.avg) - lw), mine = p.name === who, r = Math.min(4, w / 2);
+    const vs = p.diff != null ? ` · ${sg(p.diff)} % vs resto` : '', bold = mine ? 'font-weight:600' : '';
+    g += narrow ? `<text x="0" y="${cy - 13}" style="fill:var(--text);${bold}">${esc(p.name)} <tspan style="fill:var(--muted);font-weight:400">· ${p.sprints.length}/${st.period.length} sprints en común${vs}</tspan></text>`
+      : `<text x="${lw - 10}" y="${cy + 4}" text-anchor="end" style="fill:var(--text);${bold}">${esc(p.name.length > 30 ? p.name.slice(0, 30) + '…' : p.name)}</text>`;
+    if (w > 0) g += `<path d="M${lw},${cy - (narrow ? 7 : 9)} h${w - r} q${r},0 ${r},${r} v${(narrow ? 14 : 18) - 2 * r} q0,${r} ${-r},${r} h${-(w - r)} Z" fill="${mine ? 'var(--accent)' : 'var(--guide-line)'}" ${mine ? '' : 'opacity=".55"'}><title>${esc(p.name)}: ${num(p.avg)} ${unit} por sprint en ${p.sprints.length} sprints${vs}</title></path>`;
+    g += `<text x="${x(p.avg) + 8}" y="${cy + 4}" style="fill:var(--text);${bold}">${num(p.avg)}${narrow ? '' : ` <tspan style="fill:var(--muted);font-weight:400">· ${p.sprints.length}/${st.period.length} sprints en común${vs}</tspan>`}</text>`;
+  });
+  box.innerHTML = `<svg viewBox="0 0 ${W} ${H}" height="${H}" role="img" aria-label="Media por sprint de cada persona">${g}</svg>`;
+}
+let spResize; window.addEventListener('resize', () => { clearTimeout(spResize); spResize = setTimeout(() => { if (!$('sprintView').hidden) { renderSprintChart(); if ($('perfBox').open) renderPerformance(); } }, 150); });
 
 init();
 </script>

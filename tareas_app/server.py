@@ -133,6 +133,21 @@ def sprint_burnup(sprint_id: int, assignee: str | None = None):
         raise HTTPException(502, str(e))
 
 
+_perf_cache: dict = {"at": 0.0, "data": None}
+
+
+@app.get("/api/performance")
+def performance(refresh: bool = False):
+    """Desempeño histórico por persona y sprint (pesado: recorre todo el proyecto; se guarda 10 minutos)."""
+    if refresh or not _perf_cache["data"] or time.time() - _perf_cache["at"] > 600:
+        try:
+            _perf_cache["data"] = JiraClient().performance()
+        except (JiraError, httpx.HTTPError) as e:
+            raise HTTPException(502, str(e))
+        _perf_cache["at"] = time.time()
+    return _perf_cache["data"]
+
+
 class PushIn(BaseModel):
     plan: Plan
     only_ids: list[str] | None = None
