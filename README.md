@@ -86,6 +86,28 @@ Eje de tiempo:
 
 Los datos se leen de Jira al abrir la vista, al cambiar de sprint o al pulsar ↻.
 
+### Desempeño histórico individual
+
+Apartado plegado al final de la vista del sprint. Solo se pide a Jira al desplegarlo, porque recorre todas las
+incidencias del proyecto (unos 10 s); el servidor guarda el resultado 10 minutos y ↻ lo vuelve a leer.
+
+- Se elige la persona (por defecto, el usuario de Jira), la medida (puntos o tareas) y el periodo (todo el
+  histórico o los últimos 6 / 3 sprints cerrados).
+- Cada incidencia cerrada (sin épicas) cuenta en el último sprint en que estuvo y para su responsable actual; si
+  nunca tuvo sprint, en el sprint cuyo periodo contiene su fecha de resolución.
+- Para que llevar más o menos sprints no dé ventaja, toda la comparación usa solo los sprints cerrados en que estaba
+  la persona elegida (dentro del periodo), y se compara la media por sprint, no el total acumulado. De cada persona
+  cuentan los de esos sprints en que estaba en el equipo (de su primer a su último sprint con algo cerrado, con los
+  sprints a 0 intermedios); la tabla indica cuántos sprints tiene en común. El sprint en curso no entra en las medias.
+- «vs resto» compara la media de la persona con la media por persona de los demás en esos mismos sprints, y
+  «% del equipo» es su parte de lo cerrado en esos sprints.
+- Muestra indicadores, una gráfica por sprint (persona frente a la media y el rango del resto), un ranking por media
+  y una tabla del equipo.
+- **Tendencia:** media de los últimos sprints frente a la de los anteriores (3 y 3, o menos si hay pocos; hacen
+  falta 4 sprints), junto a la del resto del equipo en esos sprints.
+- **Reparto por proyecto:** por cada épica, qué % del trabajo de la persona va a ella frente al % del equipo, y
+  qué parte del proyecto hizo ella. Las subtareas y las tareas sin épica cuentan como «Sin épica».
+
 ### Limitaciones
 
 - El informe de trabajo completado usa la API interna con la que Jira dibuja su propio informe
@@ -93,6 +115,8 @@ Los datos se leen de Jira al abrir la vista, al cambiar de sprint o al pulsar �
   cambiar sin aviso.
 - El informe personal cuenta cada tarea para su responsable actual; no refleja reasignaciones durante el sprint.
 - El selector de sprint muestra los sprints activos y futuros.
+- El desempeño histórico atribuye todo a quien tiene la tarea asignada hoy, y un sprint con muy poco trabajo de
+  alguien puede alargar su periodo en el equipo; con menos de 3 sprints se marca «pocos datos».
 - Si Jira rechaza un campo opcional (prioridad, story points, fecha de inicio) porque no está en la pantalla del
   proyecto, la tarea se crea sin él y se avisa en el resultado.
 
@@ -116,6 +140,7 @@ Los datos se leen de Jira al abrir la vista, al cambiar de sprint o al pulsar �
 | `POST /api/push` | Subida a Jira |
 | `GET /api/sprint/{id}/issues` | Tareas del sprint con fecha de creación y responsable |
 | `GET /api/sprint/{id}/burnup?assignee=` | Informe de trabajo completado (del equipo o de una persona) |
+| `GET /api/performance?refresh=` | Puntos y tareas cerradas por persona y sprint en todo el histórico (caché de 10 min) |
 
 ## Desarrollo
 
