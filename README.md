@@ -1,5 +1,7 @@
 # Tareas IA → Jira
 
+**Español** · [English](README.en.md)
+
 App web local para registrar en **Jira Cloud** el trabajo del equipo y seguir el avance del sprint.
 
 - **Tareas:** describes con tus palabras el trabajo realizado, o cargas archivos de registro, y una IA
@@ -200,3 +202,7 @@ proyecto en mayúsculas («PROYECTO/CLIENTE - …»), porque la épica ya va en 
 
 - El servidor no se recarga solo: tras cambiar código Python hay que reiniciarlo.
 - `.env` (token de Jira) y `tareas.db` (datos locales) están en `.gitignore`.
+
+## Licencia
+
+[MIT](LICENSE)
