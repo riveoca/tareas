@@ -3,3 +3,10 @@ __pycache__/
 .env
 *.db
 planner/chrome-perfil/
+inicio.log
+
+# Salidas generadas y datos internos (no se publican)
+graphify-out/
+*.docx
+planner/*.json
+!planner/ejemplo_tareas.json
