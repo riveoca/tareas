@@ -14,6 +14,8 @@ Aplicación web **local** (corre en el propio PC, en `http://127.0.0.1:8765`) pe
    para Jira. Se revisan y editan en una tabla y se suben con un botón.
 2. **Seguir el avance del sprint.** Vista «📈 Avance del sprint» que reproduce el *Informe de trabajo
    completado* de Jira (del equipo y personal) y una gráfica de tareas creadas por día, **sin fines de semana**.
+3. **Gestionar las tareas propias.** Vistas Bandeja, Tablero y Tabla (sección 5.8): Historias y subtareas de una
+   persona, editables directamente en Jira, con panel de detalle y panel de alertas.
 
 Además, en `planner/` hay una **herramienta aparte** (script de línea de comandos) que carga tareas en
 **Microsoft Planner** manejando la web con Playwright (ver sección 9).
@@ -132,6 +134,10 @@ copiarlo (se crea solo).
 | `POST /api/push` | `{plan, only_ids?}` → guarda el plan tal como está en pantalla y lo sube a Jira; devuelve resultados por elemento. |
 | `GET /api/sprint/{id}/issues` | Datos del sprint e incidencias (sin épicas) con fecha de creación, responsable y estado. |
 | `GET /api/sprint/{id}/burnup[?assignee=]` | Datos del informe de trabajo completado (equipo, o una persona; `__none` = sin responsable). |
+| `GET /api/mywork?account_id=&done=` | Historias y subtareas asignadas a una persona, con sus Historias, épicas y avance (sección 5.8). |
+| `PATCH /api/issues/{key}` | `{changes, updated, force?}`: edita título, descripción, fechas, asignado o padre en Jira. 403 si es una subtarea que no creó el usuario; 409 con el valor actual si cambió en Jira desde `updated`. |
+| `POST /api/issues/{key}/status` | `{category: new\|indeterminate\|done, updated}`: cambia el estado con las transiciones de Jira. |
+| `POST /api/issues/{key}/subtasks` | `{summary, assignee_id, start_date, due_date}`: crea una subtarea bajo esa Historia. |
 
 Errores de IA o de Jira se devuelven como HTTP 502 con el mensaje en español, que el front muestra tal cual.
 
@@ -148,13 +154,28 @@ Errores de IA o de Jira se devuelven como HTTP 502 con el mensaje en español, q
    - cualquier otro → `_call_ollama`: `POST /api/chat` con `format` = JSON Schema, temperatura 0.2, contexto 16k.
 2. Las tres usan el **mismo `SYSTEM_PROMPT`** (único sitio donde están las reglas de desglose) y el mismo
    contexto (`_context_text`): fecha de hoy, tipos de incidencia, miembros del equipo, épicas existentes del
-   plan (con sus últimos 30 títulos, para no repetir) y épicas abiertas de Jira.
+   plan (con sus últimos 30 títulos, para no repetir), épicas abiertas de Jira, la persona que registra
+   (`<persona_que_registra>`: responsable de Configuración o el usuario de Jira) y las Historias abiertas
+   (`JiraClient.stories`: título, 200 caracteres de descripción, épica, estado, responsable y subtareas, una
+   por línea). El prompt va por pasos: separar trabajos → elegir la Historia más acorde (proyecto, luego la más
+   específica; en empate, la del responsable que registra y la «En curso») → poner en `cerrar` las subtareas
+   abiertas que el texto da por hechas → crear solo las subtareas nuevas. Un trabajo que toca dos Historias
+   se parte en una subtarea por Historia.
 3. `_add_to_plan()` incorpora el resultado:
    - Busca la épica por id, por nombre normalizado en el plan, o entre las épicas de Jira (en ese caso crea en
      el plan una épica `linked`). Si no existe, crea una nueva.
    - `format_title()` fuerza el formato `ÉPICA - descripción - info` (quita el prefijo si la IA ya lo puso,
      aunque la épica contenga « - »).
-   - **Deduplicación**: descarta tareas cuyo título normalizado ya exista en el plan (cuenta como `skipped`).
+   - **Deduplicación** (`dedup.py`): descarta las tareas que ya existen, por parecido y no solo por título exacto.
+     Compara la parte descriptiva del título (sin el prefijo del proyecto) por solapamiento de palabras
+     significativas (raíces de 6 letras, sin palabras vacías) y por parecido letra a letra (para erratas).
+     Umbrales calibrados con las subtareas reales: en la misma Historia 0,7 / 0,92; en otra Historia 0,8 / 0,96.
+     Se compara con las subtareas de las Historias abiertas, las creadas en los últimos 180 días en cualquier
+     Historia (`JiraClient.recent_subtasks`, también de Historias cerradas), las pendientes de la lista y las de
+     la misma respuesta. Al desglosar, `server._fresh_meta` lee de Jira en ese momento las Historias y subtareas
+     (sin esperar la caché de 10 min). La respuesta trae `duplicates` (qué se omitió y con qué incidencia
+     coincide), que la interfaz muestra plegado. Al **subir**, `push_plan` vuelve a leer las subtareas de cada
+     Historia (`subtasks_of`) y no crea la que ya exista; la marca como error y pide borrarla de la lista.
    - Responsable: el miembro del equipo que nombre el texto; si no, el de Configuración.
    - Sprint y fechas: siempre los de Configuración; fechas vacías → hoy / fin de mes. **Las fechas que
      devuelva la IA se ignoran.**
@@ -198,6 +219,48 @@ Errores de IA o de Jira se devuelven como HTTP 502 con el mensaje en español, q
     reasignaciones durante el sprint). Por defecto se muestra el usuario dueño del token.
 - Front: colores como Jira (alcance rojo, completado verde, directriz gris de 0 al alcance actual), líneas en
   escalón, «Hoy» y alcance proyectado punteado. Datos se recargan al abrir la vista, cambiar de sprint o pulsar ↻.
+
+### 5.8 Mis tareas (metodología Planner → Historias → Subtareas)
+
+Metodología del equipo: el jefe de proyecto crea el **Planner**; su sincronización crea en Jira una **Historia**
+espejo por cada tarea del Planner y lleva al Planner los cambios de la Historia (p. ej. cerrarla). Cada persona
+desglosa su trabajo en **subtareas** (1 punto cada una) de esas Historias.
+
+- **Lectura** (`JiraClient.my_work`): JQL `assignee = <persona>` sin épicas (abiertas, o también las cerradas en
+  los últimos 14 días). Añade las Historias que contienen subtareas de la persona aunque estén asignadas a otra
+  (se muestran atenuadas), el nombre de cada épica y el avance de cada Historia contando **todas** sus subtareas.
+  Las descripciones se convierten de ADF a texto (`adf_to_text`) y al guardar vuelven con `to_adf`: se pierde el
+  formato enriquecido (negritas, tablas) de una descripción que se edite desde la app.
+- **Interfaz** (rediseño del 2026-10-29, a partir de una maqueta del usuario; fuente Figtree desde Google Fonts,
+  tokens claro/oscuro con `data-theme` guardado en `localStorage`): menú lateral (`setView`: `bandeja`, `tablero`,
+  `tabla`, `tasks`, `sprint`; enlaces `#bandeja`, `#tablero`, `#tabla`, `#tareas`, `#sprint`). Las tres vistas de
+  Mis tareas comparten datos (`mw`), alcance (`mw.scope`: sprint / backlog / todo) y el panel de detalle
+  (`mwOpen`). Los cambios de estado (píldora, arrastre en el tablero, casilla de subtarea) pasan por `mwSetStatus`.
+- **Tablero** (`renderP2`): carriles por Historia (decisión del usuario, 2026-10-30). Cada Historia es una fila con
+  sus subtareas repartidas en Por hacer / En curso / Finalizada. Las subtareas se cierran con su casilla o
+  arrastrándolas; la Historia se cierra desde su cabecera («✓ Cerrar Historia» o su estado), que pregunta si cerrar
+  también las subtareas propias abiertas. Las Historias finalizadas salen plegadas (`mw.lanes`). Las tareas sin
+  Historia y sin subtareas van en un carril final «Tareas sin Historia».
+- **Pasar al sprint**: las Historias (no las subtareas, que siguen a su Historia) se mueven de sprint desde el detalle
+  (selector Sprint / Backlog) o con «→ Sprint» en su carril del tablero (al sprint activo). `edit_item` acepta
+  `sprint` (id o null) y usa la API Agile: `POST /sprint/{id}/issue` o `POST /backlog/issue`.
+- **Sprint / Backlog**: cada incidencia trae `sprint` (el activo, si no el próximo futuro; `null` si solo estuvo
+  en sprints cerrados o en ninguno). La interfaz separa por el sprint de la **Historia** (sus subtareas van con
+  ella): «Sprint actual» si está en el activo, «Backlog» en cualquier otro caso.
+- **Permisos** (decisión del usuario): subtareas editables solo si las **creó** el usuario (campo `creator`);
+  las Historias se pueden editar todas, tras un aviso de que el cambio llega al Planner. El servidor lo exige
+  (`_editable`), no solo la interfaz.
+- **Conflictos**: cada cambio manda el `updated` con que se cargó la incidencia; si en Jira es otro, 409 y la
+  interfaz ofrece usar la versión de Jira o guardar igualmente.
+- **Estados**: tres categorías (Por hacer / En curso / Finalizada) que `set_status` alcanza con las transiciones
+  disponibles (pasando por «en curso» si hace falta). Al cerrar una Historia con subtareas abiertas pregunta si
+  cerrar también las del usuario; las de otras personas no se tocan.
+- **Alertas** (calculadas en el navegador, días hábiles sin fines de semana ni festivos de Colombia — lista
+  `FESTIVOS` en `index.html`, cubre hasta 2027): vencidas, por vencer en N días hábiles, Historias pendientes,
+  listas para cerrar, sin desglosar y fechas incoherentes. El contador de la pestaña es el del usuario conectado
+  (vencidas + por vencer) y se calcula al abrir la app.
+- `edit_item` reintenta sin paréntesis una descripción que el WAF de Jira (CloudFront) bloquee (`sleep(1)`,
+  `alert()`…).
 
 ### 5.7 Interfaz (`static/index.html`)
 
@@ -252,6 +315,7 @@ Para ajustar el comportamiento del desglose, el único sitio es `SYSTEM_PROMPT` 
 | 2026-09-29 | Se dejan de enviar etiquetas a Jira. Se reescribe el prompt para evitar sobre-división y repeticiones. Fechas solo desde Configuración. Se añaden `.claude/` y el grafo `graphify-out/`. |
 | 2026-09-30 | Vista «📈 Avance del sprint» (informe de trabajo completado del equipo y personal, tareas por día, sin fines de semana). README reescrito como documentación neutra. |
 | 2026-10-05/06 | Herramienta `planner/` para Microsoft Planner (aún sin commit). |
+| 2026-10-29 | Vista «🗂 Mis tareas» con alertas y edición directa en Jira; `planner.py aplicar --reemplazar-fechas`; inicio automático (`inicio.sh`). |
 
 ## 8. Pendientes y puntos débiles conocidos
 
@@ -272,7 +336,7 @@ Para ajustar el comportamiento del desglose, el único sitio es `SYSTEM_PROMPT` 
 ## 9. Herramienta `planner/` (Microsoft Planner)
 
 Independiente de la app (su propio `.venv` y `requirements.txt` con Playwright). Sirve para volcar tareas en un
-plan de Planner (p. ej. el plan «Trazabilidad») **sin API de Microsoft Graph**, controlando la web.
+plan de Planner (p. ej. el plan «Mi plan») **sin API de Microsoft Graph**, controlando la web.
 
 - `instalar.sh`: crea `planner/.venv` (usa el Chrome del sistema, no descarga navegadores).
 - `abrir_chrome.sh`: abre un Chrome aparte con perfil propio (`planner/chrome-perfil/`, en `.gitignore`) y puerto

@@ -10,3 +10,6 @@ graphify-out/
 *.docx
 planner/*.json
 !planner/ejemplo_tareas.json
+
+# Archivos personales de trabajo
+pestanas.txt

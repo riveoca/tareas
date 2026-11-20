@@ -4,10 +4,10 @@ Se conecta a un Chrome abierto con `./abrir_chrome.sh` (puerto de depuración 93
 inició sesión en Planner. No usa la API de Microsoft Graph.
 
 Uso:
-    python planner.py ver      --plan "Trazabilidad"
-    python planner.py aplicar  --plan "Trazabilidad" tareas.json [--simular]
-    python planner.py borrar   --plan "Trazabilidad" "Título exacto de la tarea"
-    python planner.py asignar  --plan "Trazabilidad" "Nombre del responsable" [--simular]
+    python planner.py ver      --plan "Mi plan"
+    python planner.py aplicar  --plan "Mi plan" tareas.json [--simular]
+    python planner.py borrar   --plan "Mi plan" "Título exacto de la tarea"
+    python planner.py asignar  --plan "Mi plan" "Nombre del responsable" [--simular]
 """
 import argparse
 import json
@@ -106,6 +106,31 @@ def elegir(d, pg, etiqueta, valor):
     opcion.click()
     pg.wait_for_timeout(1500)
     return True
+
+
+MESES = ("enero", "febrero", "marzo", "abril", "mayo", "junio", "julio", "agosto", "septiembre", "octubre",
+         "noviembre", "diciembre")
+
+
+def cambiar_fecha(pg, campo, valor):
+    """Cambia una fecha ya puesta eligiéndola en el calendario (escribir encima no la reemplaza)."""
+    dia, mes, anio = (int(x) for x in valor.split("/"))
+    actual = campo.input_value()
+    _, mes_actual, anio_actual = (int(x) for x in actual.split("/")) if actual else (0, mes, anio)
+    campo.click()
+    pg.wait_for_timeout(1200)
+    cal = pg.get_by_role("dialog", name="Calendar").last
+    boton_dia = cal.get_by_role("button", name=f"{dia}, {MESES[mes - 1]}, {anio}", exact=True)
+    paso = "Mes siguiente" if (anio, mes) > (anio_actual, mes_actual) else "Mes anterior"
+    for _ in range(36):
+        if boton_dia.count():
+            break
+        cal.locator(f"button[title^='{paso}']").click()
+        pg.wait_for_timeout(400)
+    boton_dia.first.click()
+    pg.wait_for_timeout(1500)
+    if campo.input_value() != valor:
+        sys.exit(f"No pude poner la fecha {valor} (quedó {campo.input_value()}); reviso a mano antes de seguir.")
 
 
 def asignar(d, pg, nombre):
@@ -211,12 +236,21 @@ def cmd_aplicar(pg, args):
         loc.click()
         pg.wait_for_timeout(2500)
         d = pg.get_by_role("dialog", name=DLG)
-        for etiqueta, clave in (("Fecha de inicio", "inicio"), ("Fecha de vencimiento", "fin")):
+        # Se escribe primero la fecha que no deja el inicio después del vencimiento a mitad de camino.
+        fecha = lambda s: tuple(reversed(s.split("/"))) if s else ()
+        inicio_actual = d.get_by_label("Fecha de inicio", exact=True).input_value()
+        orden = (("Fecha de vencimiento", "fin"), ("Fecha de inicio", "inicio"))
+        if t.get("fin") and fecha(t["fin"]) < fecha(inicio_actual):
+            orden = orden[::-1]
+        for etiqueta, clave in orden:
             campo = d.get_by_label(etiqueta, exact=True)
-            if t.get(clave) and not campo.input_value():
+            actual = campo.input_value()
+            if t.get(clave) and not actual:
                 campo.fill(t[clave])
                 campo.press("Tab")
                 pg.wait_for_timeout(1200)
+            elif t.get(clave) and actual != t[clave] and args.reemplazar_fechas:
+                cambiar_fecha(pg, campo, t[clave])
         notas = d.locator("[contenteditable=true]").first
         if t.get("descripcion") and notas.inner_text().strip() in NOTAS_VACIAS:
             notas.click()
@@ -263,6 +297,8 @@ def main():
         if nombre == "aplicar":
             s.add_argument("archivo", help="JSON con la lista de tareas (ver ejemplo_tareas.json)")
             s.add_argument("--simular", action="store_true", help="Solo muestra qué haría, sin cambiar nada")
+            s.add_argument("--reemplazar-fechas", action="store_true",
+                           help="Sobrescribe las fechas ya puestas (por defecto solo se llenan las vacías)")
         if nombre == "borrar":
             s.add_argument("titulo")
         if nombre == "asignar":

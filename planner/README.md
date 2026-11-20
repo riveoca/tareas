@@ -69,7 +69,8 @@ Lista de tareas en el orden en que deben verse (de arriba abajo en cada depósit
 - `estado`: `No iniciado`, `En curso` o `Completado`.
 - `responsable` (opcional): nombre tal como aparece en el selector «Asignar a»; se añade si aún no está.
 - Las fechas y la descripción solo se escriben si están vacías en Planner; el depósito y el estado
-  se cambian siempre al valor del JSON.
+  se cambian siempre al valor del JSON. Con `--reemplazar-fechas` las fechas del JSON sustituyen a las que ya
+  tenga la tarea (para reprogramar).
 
 ## Notas
 

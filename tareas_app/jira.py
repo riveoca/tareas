@@ -1,6 +1,7 @@
 """Cliente mínimo de las APIs REST v3 y Agile de Jira Cloud."""
 from __future__ import annotations
 
+import re
 import time
 from collections import defaultdict
 from concurrent.futures import ThreadPoolExecutor
@@ -10,8 +11,10 @@ from zoneinfo import ZoneInfo
 import httpx
 
 from .config import settings
+from .dedup import find_duplicate
 from .models import Epic, Plan, Task
 
+SUBTASK_STORY_POINTS = 1  # cada subtarea vale 1 punto (decisión del usuario)
 STORY_POINT_FIELD_NAMES = ("story point estimate", "story points", "puntos de historia",
                            "estimación de puntos de historia")
 START_DATE_FIELD_NAMES = ("start date", "fecha de inicio", "fecha inicio")
@@ -33,6 +36,7 @@ class JiraClient:
             timeout=30,
         )
         self._fields: list[dict] | None = None
+        self._me: dict | None = None
 
     def _request(self, method: str, path: str, **kw) -> dict | list | None:
         r = self.http.request(method, path, **kw)
@@ -55,7 +59,9 @@ class JiraClient:
     # ---------- Lectura ----------
 
     def myself(self) -> dict:
-        return self._request("GET", "/myself")
+        if self._me is None:
+            self._me = self._request("GET", "/myself")
+        return self._me
 
     def project_info(self) -> dict:
         return self._request("GET", f"/project/{self.project}")
@@ -251,10 +257,7 @@ class JiraClient:
         pos = {s["id"]: n for n, s in enumerate(order)}
 
         sp = self.story_points_field()
-        if self._fields is None:
-            self._fields = self._request("GET", "/field")
-        sprint_field = next((f["id"] for f in self._fields
-                             if (f.get("schema") or {}).get("custom") == "com.pyxis.greenhopper.jira:gh-sprint"), None)
+        sprint_field = self.sprint_field()
         epic_types = [t["id"] for t in self.issue_types() if t["level"] == 1]
         jql = f'project = "{self.project}"'
         if epic_types:
@@ -349,11 +352,211 @@ class JiraClient:
             "users": self.assignable_users(),
             "priorities": self.priorities(),
             "sprints": self.sprints(),
-            "me": self.myself().get("displayName"),
+            "me": (me := self.myself()).get("displayName"),
+            "me_id": me.get("accountId"),
             "epics": self.epics(),
+            "stories": self.stories(),
             "story_points_field": self.story_points_field(),
             "start_date_field": self.start_date_field(),
         }
+
+    def stories(self) -> list[dict]:
+        """Historias abiertas del proyecto (espejo de las tareas del Planner) con su épica y los títulos de sus
+        subtareas: la IA cuelga de ellas el trabajo como subtareas."""
+        types = [t["id"] for t in self.issue_types() if t["level"] == 0 and re.match(r"(?i)histor|story", t["name"])]
+        if not types:
+            return []
+        jql = (f'project = "{self.project}" AND issuetype in ({", ".join(types)}) AND statusCategory != Done '
+               f'ORDER BY created ASC')
+        out = []
+        for i in self._search(jql, ["summary", "description", "parent", "assignee", "subtasks", "status"], 1000):
+            f, par = i["fields"], i["fields"].get("parent") or {}
+            out.append({"key": i["key"], "summary": f.get("summary", ""), "epic_key": par.get("key"),
+                        "description": adf_to_text(f.get("description"))[:200],
+                        "epic": (par.get("fields") or {}).get("summary"), "status": (f.get("status") or {}).get("name"),
+                        "assignee": (f.get("assignee") or {}).get("displayName"),
+                        "subtasks": [{"key": s["key"], "summary": s["fields"]["summary"],
+                                      "done": ((s["fields"].get("status") or {}).get("statusCategory") or {}).get("key") == "done"}
+                                     for s in f.get("subtasks") or []]})
+        return out
+
+    def recent_subtasks(self, days: int = 180) -> list[dict]:
+        """Subtareas creadas en los últimos `days` días, de cualquier Historia (también cerradas): para no repetirlas."""
+        jql = f'project = "{self.project}" AND issuetype in subTaskIssueTypes() AND created >= -{days}d'
+        return [{"key": i["key"], "summary": i["fields"].get("summary", ""),
+                 "parent": (i["fields"].get("parent") or {}).get("key")}
+                for i in self._search(jql, ["summary", "parent"], 3000)]
+
+    def subtasks_of(self, key: str) -> list[dict]:
+        raw = self._request("GET", f"/issue/{key}", params={"fields": "subtasks"})
+        return [{"key": s["key"], "summary": s["fields"]["summary"], "parent": key}
+                for s in raw["fields"].get("subtasks") or []]
+
+    # ---------- Mis tareas (Historias y subtareas de una persona) ----------
+
+    def _search(self, jql: str, fields: list[str], limit: int = 2000) -> list[dict]:
+        out, token = [], None
+        while len(out) < limit:
+            body = {"jql": jql, "maxResults": 100, "fields": fields}
+            if token:
+                body["nextPageToken"] = token
+            page = self._request("POST", "/search/jql", json=body)
+            out += page.get("issues", [])
+            token = page.get("nextPageToken")
+            if not token or page.get("isLast", True):
+                break
+        return out
+
+    def sprint_field(self) -> str | None:
+        if self._fields is None:
+            self._fields = self._request("GET", "/field")
+        return next((f["id"] for f in self._fields
+                     if (f.get("schema") or {}).get("custom") == "com.pyxis.greenhopper.jira:gh-sprint"), None)
+
+    def _item_fields(self) -> list[str]:
+        return ["summary", "status", "issuetype", "assignee", "creator", "duedate", "description", "parent",
+                "updated"] + [f for f in (self.start_date_field(), self.sprint_field()) if f]
+
+    def _item(self, i: dict, start_field: str | None, me_id: str) -> dict:
+        f = i["fields"]
+        # Sprint de la incidencia: el activo, si no el próximo; si solo estuvo en sprints cerrados, es backlog
+        spr = [s for s in (f.get(self.sprint_field()) or []) if s.get("state") in ("active", "future")]
+        spr.sort(key=lambda s: (s["state"] != "active", s.get("startDate") or "9"))
+        sprint = {"id": spr[0]["id"], "name": spr[0]["name"], "state": spr[0]["state"],
+                  "start": (spr[0].get("startDate") or "")[:10], "end": (spr[0].get("endDate") or "")[:10]} if spr else None
+        t = f.get("issuetype") or {}
+        st = f.get("status") or {}
+        who = lambda u: (u or {}).get("accountId")
+        return {
+            "key": i["key"], "type": t.get("name", ""), "subtask": bool(t.get("subtask")),
+            "summary": f.get("summary", ""), "status": st.get("name", ""),
+            "category": (st.get("statusCategory") or {}).get("key", "new"),
+            "assignee_id": who(f.get("assignee")), "assignee": (f.get("assignee") or {}).get("displayName"),
+            "creator_id": who(f.get("creator")), "creator": (f.get("creator") or {}).get("displayName"),
+            "start_date": f.get(start_field) if start_field else None, "due_date": f.get("duedate"),
+            "description": adf_to_text(f.get("description")), "parent": (f.get("parent") or {}).get("key"),
+            "updated": f.get("updated"), "mine": who(f.get("creator")) == me_id, "sprint": sprint,
+        }
+
+    def my_work(self, account_id: str, include_done: bool = False) -> dict:
+        """Historias (tipos estándar) y subtareas asignadas a una persona, con las Historias y épicas que las
+        contienen (aunque no sean suyas) y el avance de cada Historia contando todas sus subtareas."""
+        me_id = self.myself()["accountId"]
+        start_field = self.start_date_field()
+        epic_types = [t["id"] for t in self.issue_types() if t["level"] == 1]
+        fields = self._item_fields()
+        jql = f'project = "{self.project}" AND assignee = "{account_id}"'
+        if epic_types:
+            jql += f" AND issuetype not in ({', '.join(epic_types)})"
+        jql += " AND (statusCategory != Done OR resolved >= -14d)" if include_done else " AND statusCategory != Done"
+        items = {i["key"]: self._item(i, start_field, me_id) for i in self._search(jql + " ORDER BY duedate ASC", fields)}
+        for it in items.values():
+            it["assigned"] = True
+        # Historias que contienen subtareas de la persona pero están asignadas a otra
+        missing = sorted({it["parent"] for it in items.values() if it["subtask"] and it["parent"] not in items})
+        for i in range(0, len(missing), 100):
+            for raw in self._search(f"key in ({','.join(missing[i:i + 100])})", fields):
+                items[raw["key"]] = {**self._item(raw, start_field, me_id), "assigned": False}
+        parents = [k for k, it in items.items() if not it["subtask"]]
+        progress = {k: {"done": 0, "total": 0} for k in parents}
+        for i in range(0, len(parents), 100):
+            for raw in self._search(f"parent in ({','.join(parents[i:i + 100])})", fields):
+                p = progress[raw["fields"]["parent"]["key"]]
+                p["total"] += 1
+                p["done"] += ((raw["fields"].get("status") or {}).get("statusCategory") or {}).get("key") == "done"
+                # Las subtareas ya cerradas de la persona también se devuelven, para verlas (y reabrirlas) en su Historia
+                if raw["key"] not in items and (raw["fields"].get("assignee") or {}).get("accountId") == account_id:
+                    items[raw["key"]] = {**self._item(raw, start_field, me_id), "assigned": True}
+        for k in parents:
+            items[k]["progress"] = progress[k]
+        epic_keys = sorted({items[k]["parent"] for k in parents if items[k]["parent"]})
+        epics = {raw["key"]: raw["fields"]["summary"]
+                 for i in range(0, len(epic_keys), 100)
+                 for raw in self._search(f"key in ({','.join(epic_keys[i:i + 100])})", ["summary"])}
+        return {"items": list(items.values()), "epics": epics, "me_id": me_id}
+
+    def get_item(self, key: str) -> dict:
+        start_field = self.start_date_field()
+        fields = self._item_fields()
+        raw = self._request("GET", f"/issue/{key}", params={"fields": ",".join(fields)})
+        return self._item(raw, start_field, self.myself()["accountId"])
+
+    def edit_item(self, key: str, changes: dict) -> dict:
+        """Cambia campos básicos (summary, description, start_date, due_date, assignee_id, parent) y el sprint
+        (`sprint`: id de un sprint activo/futuro, o null para devolverla al backlog; sus subtareas la siguen)."""
+        changes = dict(changes)
+        if "sprint" in changes:
+            sprint = changes.pop("sprint")
+            if sprint:
+                self._agile("POST", f"/sprint/{int(sprint)}/issue", json={"issues": [key]})
+            else:
+                self._agile("POST", "/backlog/issue", json={"issues": [key]})
+            if not changes:
+                return self.get_item(key)
+        start_field = self.start_date_field()
+        names = {"summary": "summary", "due_date": "duedate", "start_date": start_field, "parent": "parent",
+                 "assignee_id": "assignee", "description": "description"}
+        fields = {}
+        for k, v in changes.items():
+            if k not in names or not names[k]:
+                raise JiraError(f"Campo no editable: {k}")
+            if k == "description":
+                v = to_adf(v or "")
+            elif k == "assignee_id":
+                v = {"accountId": v} if v else None
+            elif k == "parent":
+                v = {"key": v} if v else None
+            elif k in ("start_date", "due_date"):
+                v = v or None
+            fields[names[k]] = v
+        try:
+            self._request("PUT", f"/issue/{key}", json={"fields": fields})
+        except JiraError as e:
+            if "Request blocked" in str(e) and "description" in fields:
+                # El WAF de Jira rechaza textos como sleep(1) o alert(): se reescriben sin paréntesis
+                text = re.sub(r"\b(sleep|alert|eval|exec|benchmark|select|union|script)\s*\(([^)]*)\)", r"\1 \2",
+                              changes["description"], flags=re.I)
+                fields["description"] = to_adf(text)
+                self._request("PUT", f"/issue/{key}", json={"fields": fields})
+            else:
+                raise
+        return self.get_item(key)
+
+    def set_status(self, key: str, category: str) -> dict:
+        """Lleva la incidencia a un estado de la categoría pedida (new, indeterminate o done) con sus
+        transiciones; si no hay una directa, pasa antes por "en curso"."""
+        for _ in range(3):
+            if self.get_item(key)["category"] == category:
+                return self.get_item(key)
+            trs = self._request("GET", f"/issue/{key}/transitions")["transitions"]
+            cat = lambda t: ((t.get("to") or {}).get("statusCategory") or {}).get("key")
+            t = next((t for t in trs if cat(t) == category), None) or next(
+                (t for t in trs if cat(t) == "indeterminate"), None)
+            if not t:
+                break
+            self._request("POST", f"/issue/{key}/transitions", json={"transition": {"id": t["id"]}})
+        item = self.get_item(key)
+        if item["category"] != category:
+            raise JiraError(f"{key}: el flujo de Jira no permite llegar a ese estado desde «{item['status']}»")
+        return item
+
+    def create_subtask(self, parent: str, summary: str, assignee_id: str | None, start_date: str | None,
+                       due_date: str | None, description: str = "") -> dict:
+        sub_type = next((t for t in self.issue_types() if t["level"] == -1), None)
+        if not sub_type:
+            raise JiraError("El proyecto no tiene tipo Subtarea")
+        start_field = self.start_date_field()
+        fields = {"project": {"key": self.project}, "issuetype": {"id": sub_type["id"]}, "parent": {"key": parent},
+                  "summary": summary[:250], "description": to_adf(description), "duedate": due_date or None}
+        if assignee_id:
+            fields["assignee"] = {"accountId": assignee_id}
+        if start_field and start_date:
+            fields[start_field] = start_date
+        sp_field = self.story_points_field()
+        if sp_field:
+            fields[sp_field] = SUBTASK_STORY_POINTS
+        key, _ = self._save_issue(None, fields, tuple(f for f in ("duedate", start_field, sp_field) if f))
+        return self.get_item(key)
 
     # ---------- Escritura ----------
 
@@ -404,11 +607,13 @@ class JiraClient:
         by_name = {t["name"].lower(): t for t in types}
         epic_type = next((t for t in types if t["level"] == 1), None)
         std_types = [t for t in types if t["level"] == 0]
+        sub_type = next((t for t in types if t["level"] == -1), None)
         if not epic_type or not std_types:
             raise JiraError("El proyecto no tiene tipo Épica o tipos estándar disponibles")
         sp_field, start_field = self.story_points_field(), self.start_date_field()
         results: list[dict] = []
         by_sprint: dict[int, list[Task]] = defaultdict(list)
+        live_subs: dict[str, list[dict]] = {}  # subtareas actuales de cada Historia, leídas al subir
 
         def record(item, kind, ok, warnings=None, error=None, created=False):
             results.append({
@@ -435,16 +640,37 @@ class JiraClient:
                     continue  # sin épica no se crean sus hijas
 
             for task in tasks:
-                t_type = by_name.get((task.issue_type or "").lower())
-                if not t_type or t_type["level"] != 0:
+                as_sub = bool(task.parent_key and sub_type)
+                t_type = sub_type if as_sub else by_name.get((task.issue_type or "").lower())
+                if not t_type or (not as_sub and t_type["level"] != 0):
                     t_type = std_types[0]
                 try:
+                    if as_sub and task.jira_key is None:
+                        # Última comprobación en Jira: alguien pudo crearla desde que se desglosó
+                        if task.parent_key not in live_subs:
+                            live_subs[task.parent_key] = self.subtasks_of(task.parent_key)
+                        same = find_duplicate(task.summary, task.parent_key, live_subs[task.parent_key], epic.summary)
+                        if same:
+                            record(task, "task", False, error=f"Ya existe en {task.parent_key} como {same['key']} "
+                                                              f"«{same['summary']}»: no se creó. Bórrala de la lista.")
+                            continue
+                    if as_sub:  # la subtarea hereda el sprint de su Historia y vale 1 punto
+                        task.sprint_id = task.sprint_name = None
+                        task.story_points = SUBTASK_STORY_POINTS
                     fields, opt = self._fields_for(task, t_type["id"], sp_field, start_field)
-                    fields["parent"] = {"key": epic.jira_key}
+                    fields["parent"] = {"key": task.parent_key if as_sub else epic.jira_key}
                     created = task.jira_key is None
                     task.jira_key, warns = self._save_issue(task.jira_key, fields, opt)
+                    if as_sub and created:
+                        live_subs[task.parent_key].append({"key": task.jira_key, "summary": task.summary,
+                                                           "parent": task.parent_key})
+                    if task.done:
+                        try:
+                            self.set_status(task.jira_key, "done")
+                        except JiraError as e:
+                            warns.append(f"no se pudo pasar a Finalizada: {e}")
                     record(task, "task", True, warns, created=created)
-                    if task.sprint_id:
+                    if task.sprint_id and not as_sub:
                         by_sprint[task.sprint_id].append(task)
                 except (JiraError, httpx.HTTPError) as e:
                     record(task, "task", False, error=str(e))
@@ -470,6 +696,44 @@ def _num(v) -> str:
 def _dt(value: str) -> datetime:
     """Fecha ISO de Jira (con Z o -0500) a hora local."""
     return datetime.fromisoformat(value).astimezone()
+
+
+def adf_to_text(doc: dict | None) -> str:
+    """Atlassian Document Format -> texto plano (párrafos, viñetas "- " y saltos); inverso aproximado de to_adf."""
+    if not doc:
+        return ""
+
+    def inline(n: dict) -> str:
+        if n.get("type") == "text":
+            return n.get("text", "")
+        if n.get("type") == "hardBreak":
+            return "\n"
+        if n.get("type") in ("mention", "emoji", "status", "date"):
+            return (n.get("attrs") or {}).get("text", "")
+        if n.get("type") == "inlineCard":
+            return (n.get("attrs") or {}).get("url", "")
+        return "".join(inline(c) for c in n.get("content", []))
+
+    def block(n: dict, prefix: str = "") -> list[str]:
+        t = n.get("type")
+        if t in ("bulletList", "orderedList"):
+            return [line for item in n.get("content", []) for line in block(item, "- ")]
+        if t == "listItem":
+            lines = [line for c in n.get("content", []) for line in block(c)]
+            return [prefix + lines[0]] + ["  " + x for x in lines[1:]] if lines else []
+        if t in ("paragraph", "heading", "codeBlock", "blockquote", "panel") or "content" not in n:
+            text = inline(n) if t != "blockquote" and t != "panel" else "\n".join(
+                line for c in n.get("content", []) for line in block(c))
+            return [prefix + text] if text else []
+        return [line for c in n.get("content", []) for line in block(c)]
+
+    out: list[str] = []
+    for n in doc.get("content", []):
+        lines = block(n)
+        if out and lines and n.get("type") not in ("bulletList", "orderedList"):
+            out.append("")
+        out += lines
+    return "\n".join(out).strip()
 
 
 def to_adf(text: str) -> dict:

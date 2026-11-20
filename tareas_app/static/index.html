@@ -4,59 +4,333 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Gestor de tareas</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Figtree:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<script>try { const t = localStorage.getItem('theme'); if (t) document.documentElement.dataset.theme = t; } catch {}</script>
 <style>
+  /* ---------- Tokens (claro / oscuro). Los nombres antiguos (--text, --border, --row, --ok…) apuntan a los nuevos ---------- */
   :root {
-    --bg: #f4f5f7; --panel: #fff; --text: #1d2330; --muted: #6b7280; --border: #e2e5ea; --row: #fafbfc;
-    --accent: #2563eb; --done-line: #5e9a1c; --scope-line: #d04437; --guide-line: #8c8f94; --accent-soft: #e8efff; --ok: #15803d; --ok-soft: #e7f6ec; --err: #b91c1c; --warn: #b45309;
+    --bg: #F3F4FA; --glow: #E4E3FF; --panel: #FFFFFF; --raised: #FFFFFF; --sunk: #EEEFF6; --ink: #1C1E2E; --muted: #636781; --faint: #9A9DB4;
+    --line: #E5E6F0; --accent: #5B5BD6; --accent-2: #8E6CF0; --accent-soft: #ECECFE; --on-accent: #FFFFFF;
+    --todo: #6E7391; --todo-bg: #EEF0F6; --prog: #C87500; --prog-bg: #FFF2DC; --done: #228A5A; --done-bg: #E1F5EA; --late: #DC3E45; --late-bg: #FFE9EA;
+    --sh-1: 0 1px 2px rgba(28,30,46,.05), 0 2px 8px rgba(28,30,46,.04);
+    --sh-2: 0 2px 4px rgba(28,30,46,.04), 0 12px 32px rgba(70,60,160,.10);
+    --r-lg: 22px; --r-md: 16px; --r-sm: 11px;
+    --font: "Figtree", "Segoe UI", system-ui, sans-serif;
+    --done-line: #5e9a1c; --scope-line: #d04437; --guide-line: #8c8f94;
+    color-scheme: light;
   }
-  @media (prefers-color-scheme: dark) {
-    :root { --bg: #111418; --panel: #1a1e24; --text: #e6e8eb; --muted: #9aa3ad; --border: #2c323a; --row: #1d2229;
-      --accent: #5b8cff; --done-line: #82b536; --scope-line: #e34935; --guide-line: #8c8f94; --accent-soft: #1e2a44; --ok: #4ade80; --ok-soft: #173024; --err: #f87171; --warn: #fbbf24; }
+  @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+    --bg: #0E1016; --glow: #1D1B3D; --panel: #161922; --raised: #1C202B; --sunk: #11141B; --ink: #ECEDF6; --muted: #A0A4BE; --faint: #6D7190;
+    --line: #252A37; --accent: #8B8DF8; --accent-2: #B191FF; --accent-soft: #23234A; --on-accent: #0E1016;
+    --todo: #A9AECB; --todo-bg: #232737; --prog: #FFB547; --prog-bg: #382A12; --done: #4CC38A; --done-bg: #15302A; --late: #FF6B70; --late-bg: #3C1A1F;
+    --sh-1: 0 1px 2px rgba(0,0,0,.35); --sh-2: 0 12px 32px rgba(0,0,0,.35);
+    --done-line: #82b536; --scope-line: #e34935; color-scheme: dark;
+  } }
+  :root[data-theme="dark"] {
+    --bg: #0E1016; --glow: #1D1B3D; --panel: #161922; --raised: #1C202B; --sunk: #11141B; --ink: #ECEDF6; --muted: #A0A4BE; --faint: #6D7190;
+    --line: #252A37; --accent: #8B8DF8; --accent-2: #B191FF; --accent-soft: #23234A; --on-accent: #0E1016;
+    --todo: #A9AECB; --todo-bg: #232737; --prog: #FFB547; --prog-bg: #382A12; --done: #4CC38A; --done-bg: #15302A; --late: #FF6B70; --late-bg: #3C1A1F;
+    --sh-1: 0 1px 2px rgba(0,0,0,.35); --sh-2: 0 12px 32px rgba(0,0,0,.35);
+    --done-line: #82b536; --scope-line: #e34935; color-scheme: dark;
   }
+  :root { --text: var(--ink); --border: var(--line); --row: var(--sunk); --ok: var(--done); --ok-soft: var(--done-bg); --err: var(--late); --warn: var(--prog); }
   * { box-sizing: border-box; }
   [hidden] { display: none !important; }
-  body { margin: 0; font: 14px/1.45 system-ui, -apple-system, "Segoe UI", sans-serif; background: var(--bg); color: var(--text); }
+  body { margin: 0; background: var(--bg); background-image: radial-gradient(60rem 28rem at 15% -8rem, var(--glow), transparent 70%); background-repeat: no-repeat;
+    color: var(--ink); font: 400 14px/1.5 var(--font); -webkit-font-smoothing: antialiased; }
   button, input, select, textarea { font: inherit; color: inherit; }
-  button { cursor: pointer; border: 1px solid var(--border); background: var(--panel); border-radius: 6px; padding: 6px 11px; white-space: nowrap; }
-  button.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
-  button.ghost { border-color: transparent; background: transparent; color: var(--muted); padding: 2px 6px; }
-  button.danger { color: var(--err); }
+  :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  button { cursor: pointer; border: 1px solid var(--line); background: var(--raised); border-radius: 10px; padding: 6px 12px; white-space: nowrap; font-weight: 600; }
+  button:hover { border-color: var(--accent); }
+  button.primary { background: linear-gradient(135deg, var(--accent), var(--accent-2)); border-color: transparent; color: var(--on-accent); box-shadow: 0 6px 16px -8px var(--accent); }
+  button.ghost { border-color: transparent; background: transparent; color: var(--muted); padding: 2px 6px; font-weight: 500; }
+  button.danger { color: var(--late); }
   button:disabled { opacity: .5; cursor: default; }
-  input, select, textarea { background: var(--panel); border: 1px solid var(--border); border-radius: 6px; padding: 5px 7px; width: 100%; min-width: 0; }
+  input, select, textarea { background: var(--raised); border: 1px solid var(--line); border-radius: 10px; padding: 6px 9px; width: 100%; min-width: 0; }
+  input:focus, select:focus, textarea:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
   textarea { resize: vertical; }
   .cell-input { border-color: transparent; background: transparent; }
-  .cell-input:hover, .cell-input:focus { border-color: var(--border); background: var(--panel); }
+  .cell-input:hover, .cell-input:focus { border-color: var(--line); background: var(--raised); }
+  .ico { width: 15px; height: 15px; vertical-align: -2px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+  .sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
 
-  .topbar { position: sticky; top: 0; z-index: 5; display: flex; gap: 10px; align-items: center; padding: 10px 20px; background: var(--panel); border-bottom: 1px solid var(--border); flex-wrap: wrap; }
-  .topbar h1 { font-size: 17px; margin: 0; }
+  /* ---------- Marco: menú lateral + barra superior ---------- */
+  .rail { position: fixed; top: 0; left: 0; bottom: 0; width: 72px; z-index: 10; background: var(--panel); border-right: 1px solid var(--line);
+    display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 16px 0; }
+  .rail .logo, .rail .logo:hover { width: 40px; height: 40px; color: var(--on-accent); border-radius: 12px; background: linear-gradient(135deg, var(--accent), var(--accent-2)); display: grid; place-items: center;
+    color: var(--on-accent); margin-bottom: 14px; box-shadow: 0 8px 20px -8px var(--accent); }
+  .rail button { position: relative; width: 44px; height: 44px; border-radius: 12px; display: grid; place-items: center; color: var(--faint); border: 0; background: none; padding: 0; }
+  .rail button:hover { background: var(--sunk); color: var(--ink); }
+  .rail button.on { background: var(--accent-soft); color: var(--accent); }
+  .rail button.on::before { content: ""; position: absolute; left: -14px; top: 10px; bottom: 10px; width: 3px; border-radius: 0 3px 3px 0; background: var(--accent); }
+  .rail .sep { width: 28px; height: 1px; background: var(--line); margin: 6px 0; }
+  .rail .grow { flex: 1; }
+  .rail svg { width: 21px; height: 21px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+  .rail .badge { position: absolute; top: 2px; right: 1px; border: 2px solid var(--panel); }
+  .badge { min-width: 18px; height: 18px; padding: 0 5px; border-radius: 999px; background: var(--late); color: #fff; font-size: 11px; font-weight: 800; display: inline-grid; place-items: center; }
+  .shell { margin-left: 72px; min-width: 0; }
+  .topbar { position: sticky; top: 0; z-index: 8; display: flex; gap: 12px; align-items: center; padding: 10px 24px; background: color-mix(in srgb, var(--panel) 92%, transparent);
+    backdrop-filter: blur(8px); border-bottom: 1px solid var(--line); flex-wrap: wrap; }
+  .crumbs { font-weight: 800; font-size: 16px; display: flex; gap: 8px; align-items: center; letter-spacing: -.01em; }
+  .crumbs span { color: var(--faint); font-weight: 500; }
+  .kbar { display: flex; align-items: center; gap: 8px; padding: 6px 10px; border: 1px solid var(--line); border-radius: 11px; background: var(--sunk); color: var(--faint); min-width: 220px; }
+  .kbar input { border: 0; background: none; padding: 0; box-shadow: none !important; flex: 1; color: var(--ink); }
+  .kbar:focus-within { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+  .kbar kbd { font: 600 11px var(--font); background: var(--raised); border: 1px solid var(--line); border-radius: 6px; padding: 0 5px; }
   .spacer { flex: 1; }
-  .status { font-size: 12px; color: var(--muted); }
-  .dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 4px; }
-  main { max-width: 1400px; margin: 0 auto; padding: 16px 20px 60px; display: grid; gap: 16px; }
-  .card { background: var(--panel); border: 1px solid var(--border); border-radius: 10px; min-width: 0; }
-  .card-head { display: flex; align-items: center; gap: 10px; padding: 10px 14px; border-bottom: 1px solid var(--border); flex-wrap: wrap; }
-  .card-head h2 { font-size: 15px; margin: 0; }
-  .card-body { padding: 14px; }
+  .status, .sync { font-size: 13px; color: var(--muted); display: flex; align-items: center; gap: 6px; }
+  .sync::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: var(--done); box-shadow: 0 0 0 3px var(--done-bg); }
+  .sync.off::before { background: var(--late); box-shadow: 0 0 0 3px var(--late-bg); }
+  .tb-group { display: flex; gap: 8px; align-items: center; }
+  .tb-group select { width: auto; max-width: 220px; }
+  .check { display: flex; gap: 5px; align-items: center; font-size: 13px; color: var(--muted); }
+  .check input { width: auto; }
+  .avatar { width: 34px; height: 34px; border-radius: 50%; background: linear-gradient(135deg, #FFB86B, #F0629B); color: #fff; display: grid; place-items: center; font-weight: 800; font-size: 12px; flex: none; }
+  .bell { position: relative; padding: 6px 10px; }
+  .bell .badge { position: absolute; top: -7px; right: -7px; }
+  main { max-width: 1320px; margin: 0 auto; padding: 22px 24px 60px; display: grid; gap: 18px; }
+
+  /* ---------- Piezas comunes ---------- */
+  .card { background: var(--panel); border: 1px solid var(--line); border-radius: var(--r-md); min-width: 0; box-shadow: var(--sh-1); }
+  .card-head { display: flex; align-items: center; gap: 10px; padding: 12px 18px; border-bottom: 1px solid var(--line); flex-wrap: wrap; }
+  .card-head h2 { font-size: 16px; margin: 0; font-weight: 800; letter-spacing: -.01em; }
+  .card-body { padding: 18px; }
   .muted { color: var(--muted); font-size: 12px; }
+  .empty { color: var(--muted); text-align: center; padding: 40px 10px; }
+  .note { margin-top: 10px; padding: 9px 13px; border-radius: 10px; background: var(--done-bg); font-size: 13px; }
+  .note.err { background: var(--late-bg); color: var(--late); }
+  .ok { color: var(--done); } .err { color: var(--late); } .warn { color: var(--prog); }
+  .spinner { display: inline-block; width: 12px; height: 12px; border: 2px solid currentColor; border-top-color: transparent; border-radius: 50%; animation: spin 1s linear infinite; vertical-align: -2px; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .seg { display: inline-flex; background: var(--sunk); border-radius: 11px; padding: 3px; flex-wrap: wrap; }
+  .seg button { border: 0; background: none; padding: 5px 12px; border-radius: 8px; font-weight: 600; font-size: 13px; color: var(--muted); box-shadow: none; }
+  .seg button.on { background: var(--raised); color: var(--ink); box-shadow: var(--sh-1); }
+  .seg .cnt { font-size: 11px; font-weight: 800; color: var(--faint); margin-left: 3px; }
+  .seg button.on .cnt { color: var(--accent); }
+  .pill { display: inline-flex; align-items: center; gap: 6px; border: 0; border-radius: 999px; padding: 4px 11px 4px 9px; font-size: 12px; font-weight: 700; white-space: nowrap; }
+  .pill::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: currentColor; }
+  .s-new { background: var(--todo-bg); color: var(--todo); }
+  .s-new::before { background: transparent; border: 2px solid currentColor; width: 9px; height: 9px; }
+  .s-indeterminate { background: var(--prog-bg); color: var(--prog); }
+  .s-indeterminate::before { background: conic-gradient(currentColor 0 50%, transparent 50%); border: 2px solid currentColor; width: 10px; height: 10px; }
+  .s-done { background: var(--done-bg); color: var(--done); }
+  .s-done::before { content: "✓"; width: auto; height: auto; background: none; font-size: 12px; line-height: 1; }
+  button.pill:hover { box-shadow: inset 0 0 0 1px currentColor; }
+  .ikey { font-size: 12px; color: var(--faint); font-weight: 600; white-space: nowrap; }
+  a.ikey { text-decoration: none; } a.ikey:hover { color: var(--accent); }
+  .due { font-size: 13px; color: var(--muted); white-space: nowrap; font-weight: 500; display: inline-flex; gap: 5px; align-items: center; }
+  .due.late { color: var(--late); background: var(--late-bg); padding: 2px 8px; border-radius: 7px; font-weight: 700; }
+  .due.soon { color: var(--prog); background: var(--prog-bg); padding: 2px 8px; border-radius: 7px; font-weight: 700; }
+  .due.bl { color: var(--faint); }
+  .mini.qd { padding: 2px 8px; font-size: 12px; color: var(--accent); border-color: var(--accent-soft); background: var(--accent-soft); }
+  .kind.sp { background: var(--accent-soft); color: var(--accent); }
+  .attn.calm { background: linear-gradient(135deg, var(--done-bg), var(--panel) 70%); }
+  .bar { height: 6px; border-radius: 6px; background: var(--sunk); overflow: hidden; display: block; }
+  .bar > i { display: block; height: 100%; background: linear-gradient(90deg, var(--accent), var(--accent-2)); border-radius: 6px; }
+  .etag { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 700; color: var(--ec); background: color-mix(in srgb, var(--ec) 12%, transparent);
+    padding: 2px 8px; border-radius: 7px; white-space: nowrap; max-width: 100%; overflow: hidden; text-overflow: ellipsis; }
+  .etag::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: var(--ec); flex: none; }
+  .kind { font-size: 11px; font-weight: 700; color: var(--muted); background: var(--sunk); border-radius: 6px; padding: 1px 6px; }
+  .linkbtn { border: 0; background: none; color: var(--accent); font-weight: 700; padding: 3px 0; box-shadow: none; }
+  .mini { border: 1px solid var(--line); background: var(--raised); border-radius: 9px; padding: 5px 10px; font-size: 13px; font-weight: 600; }
+  .mini:hover { border-color: var(--accent); color: var(--accent); }
+  .mini.go { background: var(--done-bg); color: var(--done); border-color: transparent; }
+  .flash { animation: flash 1.6s ease-out; }
+  @keyframes flash { from { background: var(--accent-soft); } }
 
-  .defaults { display: flex; gap: 14px; flex-wrap: wrap; font-size: 13px; padding: 9px 14px; background: var(--accent-soft); border-radius: 10px; align-items: center; }
-  .defaults b { font-weight: 600; }
+  /* ---------- 1. Bandeja ---------- */
+  .p1 { display: grid; grid-template-columns: minmax(0, 1fr) 19rem; gap: 22px; align-items: start; }
+  @media (max-width: 1000px) { .p1 { grid-template-columns: 1fr; } }
+  .hero { position: relative; overflow: hidden; border-radius: var(--r-lg); padding: 24px 24px 22px; margin-bottom: 20px; color: #fff;
+    background: linear-gradient(125deg, #4B47D6 0%, #7B5CF0 55%, #C76AE8 100%); display: flex; gap: 22px; align-items: flex-end; flex-wrap: wrap; box-shadow: 0 18px 40px -18px #5B4BE0; }
+  .hero::before { content: ""; position: absolute; width: 18rem; height: 18rem; right: -5rem; top: -9rem; border-radius: 50%; background: radial-gradient(circle, rgba(255,255,255,.28), transparent 65%); pointer-events: none; }
+  .hero::after { content: ""; position: absolute; width: 10rem; height: 10rem; right: 9rem; bottom: -6rem; border-radius: 50%; border: 1.5px solid rgba(255,255,255,.25); pointer-events: none; }
+  .hero .hi { flex: 1 1 16rem; position: relative; }
+  .hero .date { margin: 0; opacity: .8; font-size: 13px; font-weight: 600; }
+  .hero h2 { margin: 2px 0 3px; font-size: 30px; font-weight: 800; letter-spacing: -.025em; line-height: 1.1; }
+  .hero p { margin: 0; opacity: .9; }
+  .kpis { display: flex; gap: 9px; position: relative; flex-wrap: wrap; }
+  .kpis div { background: rgba(255,255,255,.16); backdrop-filter: blur(8px); border: 1px solid rgba(255,255,255,.25); border-radius: 14px; padding: 9px 13px; min-width: 82px; }
+  .kpis b { display: block; font-size: 24px; font-weight: 800; line-height: 1.1; }
+  .kpis span { font-size: 12px; opacity: .85; }
+  .kpis .kwarn b { color: #FFD3D6; }
+  .hero-link { border: 0; background: rgba(255,255,255,.18); color: #fff; padding: 2px 10px; border-radius: 8px; font-weight: 700; margin-left: 4px; }
+  .hero-link:hover { background: rgba(255,255,255,.3); }
+  #tasksView .hero, #sprintView .hero { margin-bottom: 0; }
+  .attn { background: linear-gradient(135deg, var(--late-bg), var(--panel) 70%); border: 1px solid var(--line); border-radius: var(--r-md); padding: 16px 18px; margin-bottom: 20px; box-shadow: var(--sh-1); }
+  .attn h3 { margin: 0 0 6px; font-size: 15px; display: flex; align-items: center; gap: 8px; }
+  .attn h3::before { content: "!"; width: 21px; height: 21px; border-radius: 50%; background: var(--late); color: #fff; display: grid; place-items: center; font-size: 12px; font-weight: 800; }
+  .attn-row { display: flex; align-items: center; gap: 11px; padding: 10px 12px; margin-top: 8px; flex-wrap: wrap; background: var(--raised); border-radius: var(--r-sm); box-shadow: var(--sh-1); cursor: pointer; }
+  .attn-row .t { flex: 1 1 15rem; min-width: 0; font-weight: 600; }
+  .attn-row .t > div:first-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .attn-row .acts { display: flex; gap: 6px; }
+  .ok-msg { color: var(--done); font-weight: 700; margin: 0; }
+  .epic { background: var(--panel); border: 1px solid var(--line); border-radius: var(--r-md); margin-bottom: 14px; overflow: hidden; box-shadow: var(--sh-1); }
+  .epic-h { display: flex; align-items: center; gap: 12px; padding: 14px 18px; width: 100%; border: 0; background: none; text-align: left; border-radius: 0; box-shadow: none; }
+  .epic-h .name { font-weight: 800; flex: 1; display: flex; align-items: center; gap: 9px; font-size: 15px; min-width: 0; }
+  .epic-h .name::before { content: ""; width: 12px; height: 12px; border-radius: 5px; background: var(--ec); box-shadow: 0 0 0 4px color-mix(in srgb, var(--ec) 18%, transparent); flex: none; }
+  .epic-h .bar { width: 7rem; }
+  .epic-h .bar > i { background: var(--ec); }
+  .epic-h .cnt { font-size: 13px; color: var(--muted); min-width: 4.5rem; text-align: right; font-weight: 500; }
+  .chev { transition: transform .2s; color: var(--faint); }
+  .epic.closed .chev { transform: rotate(-90deg); }
+  .epic.closed .epic-b { display: none; }
+  .row { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; gap: 14px; align-items: center; padding: 11px 18px; border-top: 1px solid var(--line); cursor: pointer; }
+  .row:hover { background: color-mix(in srgb, var(--sunk) 60%, transparent); }
+  .row .ttl { min-width: 0; }
+  .row .ttl b { font-weight: 600; display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .meta { display: flex; gap: 9px; align-items: center; margin-top: 3px; }
+  .meta .bar { width: 5rem; }
+  .more { padding: 8px 18px; border-top: 1px solid var(--line); }
+  .side { display: grid; gap: 14px; }
+  .box { background: var(--panel); border: 1px solid var(--line); border-radius: var(--r-md); padding: 18px; box-shadow: var(--sh-1); }
+  .box h3 { margin: 0 0 2px; font-size: 15px; }
+  .box .sub { color: var(--muted); font-size: 13px; margin: 0 0 11px; }
+  .ring { position: relative; width: 9.5rem; height: 9.5rem; margin: 8px auto 14px; }
+  .ring svg { width: 100%; height: 100%; transform: rotate(-90deg); }
+  .ring circle { fill: none; stroke-width: 11; stroke-linecap: round; }
+  .ring .ring-bg { stroke: var(--sunk); }
+  .ring .ring-fg { stroke: url(#rg); stroke-dasharray: 326.7; transition: stroke-dashoffset .6s ease; }
+  .ring-c { position: absolute; inset: 0; display: grid; place-content: center; text-align: center; }
+  .ring-c b { font-size: 30px; font-weight: 800; letter-spacing: -.02em; line-height: 1; }
+  .ring-c span { font-size: 12px; color: var(--muted); }
+  .days { display: flex; gap: 4px; margin: 8px 0 0; }
+  .days i { flex: 1; height: 8px; border-radius: 4px; background: var(--sunk); }
+  .days i.past { background: var(--accent); opacity: .4; }
+  .days i.now { background: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+  .stat { display: flex; justify-content: space-between; align-items: center; padding: 7px 0; border-top: 1px solid var(--line); font-size: 14px; }
+  .stat:first-of-type { border-top: 0; }
+  .stat b { font-weight: 800; font-size: 16px; }
+  button.stat { width: 100%; border: 0; border-top: 1px solid var(--line); border-radius: 0; background: none; padding: 7px 0; box-shadow: none; font-weight: 400; }
+  button.stat:hover { color: var(--accent); }
+  .feed { list-style: none; margin: 0; padding: 0; display: grid; gap: 9px; }
+  .feed li { display: flex; gap: 9px; font-size: 13px; align-items: flex-start; }
+  .feed li i { flex: none; width: 24px; height: 24px; border-radius: 50%; display: grid; place-items: center; background: var(--accent-soft); color: var(--accent); font-style: normal; font-size: 11px; font-weight: 800; }
+  .feed li small { display: block; color: var(--faint); }
+  .feed .empty-f { color: var(--faint); }
 
-  .tabs { display: flex; gap: 4px; }
-  .tabs button { border: none; background: none; padding: 6px 10px; border-bottom: 2px solid transparent; border-radius: 0; color: var(--muted); }
-  .tabs button.on { border-bottom-color: var(--accent); color: var(--accent); font-weight: 600; }
-  .drop { border: 2px dashed var(--border); border-radius: 10px; padding: 26px; text-align: center; color: var(--muted); cursor: pointer; }
+  /* ---------- 2. Tablero ---------- */
+  .p2-head { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; margin-bottom: 18px; }
+  .p2-head h2 { margin: 0; font-size: 24px; font-weight: 800; letter-spacing: -.02em; }
+  .p2-head .bar { flex: 1 1 10rem; max-width: 22rem; height: 9px; }
+  .who { display: flex; align-items: center; gap: 6px; min-width: 0; }
+  .mav { width: 22px; height: 22px; border-radius: 50%; background: linear-gradient(135deg, #FFB86B, #F0629B); color: #fff; display: inline-grid; place-items: center; font-size: 9px; font-weight: 800; flex: none; }
+  /* Carriles por Historia: cada Historia es una fila con sus subtareas repartidas en las tres columnas */
+  .lanes { overflow-x: auto; padding-bottom: 8px; }
+  .lanes > * { min-width: 46rem; }
+  .lanes-h, .lane-b { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
+  .lanes-h { position: sticky; top: 0; z-index: 2; background: var(--bg); padding: 4px 0 8px; }
+  .lanes-h > div { display: flex; align-items: center; justify-content: space-between; padding: 6px 10px; border-radius: 10px; background: var(--panel);
+    border: 1px solid var(--line); border-top: 3px solid var(--cc); font-size: 12px; font-weight: 700; color: var(--muted); }
+  .lanes-h > div[data-col="new"], .cell[data-col="new"] { --cc: var(--todo); } .lanes-h > div[data-col="indeterminate"], .cell[data-col="indeterminate"] { --cc: var(--prog); }
+  .lanes-h > div[data-col="done"], .cell[data-col="done"] { --cc: var(--done); }
+  .lane { background: var(--panel); border: 1px solid var(--line); border-left: 4px solid var(--ec); border-radius: var(--r-md); margin-top: 10px; box-shadow: var(--sh-1); }
+  .lane.other { opacity: .8; }
+  .lane-h { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; padding: 10px 12px; }
+  .lane-h .tg { border: 0; background: none; box-shadow: none; padding: 2px 4px; font-size: 13px; color: var(--muted); width: 1.6rem; }
+  .lane-h .nm { font-weight: 700; cursor: pointer; flex: 1 1 14rem; min-width: 0; }
+  .lane-h .nm:hover { color: var(--accent); }
+  .lane-h .bar { width: 6rem; height: 7px; }
+  .lane-b { padding: 0 10px 10px; }
+  .cell { background: color-mix(in srgb, var(--sunk) 70%, transparent); border-radius: 12px; padding: 7px; min-height: 3.4rem; display: flex; flex-direction: column; gap: 7px;
+    border-top: 2px solid color-mix(in srgb, var(--cc) 45%, transparent); }
+  .cell.over { outline: 2px dashed var(--accent); outline-offset: -3px; background: var(--accent-soft); }
+  .scard { background: var(--raised); border: 1px solid var(--line); border-radius: 11px; padding: 8px 10px; display: flex; gap: 8px; align-items: flex-start; box-shadow: var(--sh-1); cursor: pointer; font-size: 13px; }
+  .scard[draggable="true"] { cursor: grab; }
+  .scard.lateC { box-shadow: inset 3px 0 0 var(--late), var(--sh-1); }
+  .scard input { margin-top: 2px; accent-color: var(--done); width: 15px; height: 15px; flex: none; }
+  .scard .b { flex: 1; min-width: 0; }
+  .scard .t { font-weight: 600; line-height: 1.35; overflow-wrap: anywhere; }
+  .scard.d .t { color: var(--muted); text-decoration: line-through; }
+  .scard .f { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin-top: 5px; }
+  .lane-empty { grid-column: 1 / -1; font-size: 13px; color: var(--faint); padding: 4px 4px 2px; }
+
+  /* ---------- 3. Tabla con panel ---------- */
+  .chips { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin-bottom: 14px; }
+  .chip { border: 1px solid var(--line); background: var(--panel); border-radius: 999px; padding: 6px 13px; font-weight: 600; font-size: 13px; display: inline-flex; gap: 7px; align-items: center; box-shadow: var(--sh-1); }
+  .chip b { font-weight: 800; color: var(--muted); }
+  .chip.on { background: var(--ink); color: var(--bg); border-color: var(--ink); }
+  .chip.on b { color: inherit; opacity: .7; }
+  .chip.alert b { color: var(--late); }
+  .chips .search { flex: 1 1 12rem; max-width: 20rem; margin-left: auto; }
+  .tbl { background: var(--panel); border: 1px solid var(--line); border-radius: var(--r-md); overflow: hidden; box-shadow: var(--sh-1); }
+  .tr { display: grid; grid-template-columns: minmax(0, 1fr) 9rem 11rem 9rem; gap: 14px; align-items: center; padding: 11px 18px; border-top: 1px solid var(--line); }
+  .tr.th { border-top: 0; font-size: 12px; font-weight: 700; color: var(--faint); background: var(--sunk); }
+  .tr.item { cursor: pointer; }
+  .tr.item:hover { background: color-mix(in srgb, var(--sunk) 60%, transparent); }
+  .tr.item.sel { background: var(--accent-soft); box-shadow: inset 3px 0 0 var(--accent); }
+  .tr .ttl { display: flex; flex-direction: column; min-width: 0; }
+  .tr .ttl b { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .tr .prog { display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--muted); }
+  .tr .prog .bar { flex: 1; }
+  .grp { padding: 9px 18px; border-top: 1px solid var(--line); font-size: 13px; font-weight: 800; display: flex; gap: 8px; align-items: center; color: var(--ec);
+    background: color-mix(in srgb, var(--ec) 6%, transparent); }
+  .grp::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: var(--ec); }
+  @media (max-width: 760px) { .tr { grid-template-columns: minmax(0, 1fr) auto; } .tr .prog, .tr .dcol { display: none; } }
+
+  /* ---------- Paneles laterales (detalle y alertas) ---------- */
+  .drawer { position: fixed; top: 0; right: 0; bottom: 0; width: min(30rem, 100%); background: var(--panel); border-left: 1px solid var(--line); box-shadow: -20px 0 50px rgba(20,20,60,.18);
+    transform: translateX(105%); transition: transform .25s cubic-bezier(.2,.8,.2,1), visibility .25s; z-index: 20; display: flex; flex-direction: column; visibility: hidden; }
+  .drawer.open { transform: none; visibility: visible; }
+  .drawer.narrow { width: min(24rem, 100%); z-index: 18; }
+  .dr-h { padding: 18px 20px; border-bottom: 1px solid var(--line); display: flex; gap: 12px; align-items: flex-start; background: linear-gradient(180deg, var(--accent-soft), var(--panel)); }
+  .dr-h > div { min-width: 0; flex: 1; }
+  .dr-h h3 { margin: 8px 0 3px; font-size: 18px; line-height: 1.3; }
+  .dr-h .x { margin-left: auto; border: 0; background: var(--raised); border-radius: 10px; width: 34px; height: 34px; flex: none; box-shadow: var(--sh-1); padding: 0; }
+  .dr-b { padding: 18px 20px; overflow: auto; flex: 1; display: grid; gap: 16px; align-content: start; }
+  .dr-f { padding: 12px 20px; border-top: 1px solid var(--line); display: flex; gap: 8px; align-items: center; }
+  .fields { display: grid; grid-template-columns: 6.5rem 1fr; gap: 10px 12px; align-items: center; margin: 0; font-size: 14px; }
+  .fields dt { color: var(--muted); }
+  .fields dd { margin: 0; min-width: 0; }
+  .dr-note { font-size: 13px; padding: 8px 11px; border-radius: 10px; background: var(--sunk); }
+  .dr-note.warn { color: var(--prog); background: var(--prog-bg); }
+  .dr-label { font-size: 13px; color: var(--muted); display: grid; gap: 5px; }
+  .subs h4 { margin: 0 0 8px; font-size: 14px; display: flex; justify-content: space-between; }
+  .sub-i { display: flex; gap: 10px; align-items: flex-start; padding: 9px 10px; margin-top: 6px; border-radius: 10px; background: var(--sunk); font-size: 14px; }
+  .sub-i input { margin-top: 3px; accent-color: var(--done); width: 16px; height: 16px; flex: none; }
+  .sub-i span { flex: 1; min-width: 0; cursor: pointer; }
+  .sub-i span:hover { color: var(--accent); }
+  .sub-i.d span { color: var(--muted); text-decoration: line-through; }
+  .sub-add { display: flex; gap: 6px; margin-top: 8px; }
+  .scrim { position: fixed; inset: 0; background: rgba(15,15,40,.3); backdrop-filter: blur(2px); opacity: 0; pointer-events: none; transition: opacity .2s; z-index: 19; }
+  .scrim.open { opacity: 1; pointer-events: auto; }
+  .al-group summary { display: flex; justify-content: space-between; align-items: center; cursor: pointer; padding: 10px 10px; border-radius: 10px; font-weight: 700; list-style: none; }
+  .al-group summary::-webkit-details-marker { display: none; }
+  .al-group summary:hover { background: var(--sunk); }
+  .al-group b.late { color: var(--late); } .al-group b.soon { color: var(--prog); }
+  .al-item { display: grid; grid-template-columns: auto 1fr; gap: 10px; align-items: start; padding: 8px 10px 8px 14px; border-radius: 10px; cursor: pointer; font-size: 13px; }
+  .al-item:hover { background: var(--sunk); }
+  .al-item > div { min-width: 0; }
+  .al-title { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 600; }
+  .al-empty { margin: 2px 14px 8px; }
+  .stmenu { position: fixed; z-index: 30; background: var(--raised); border: 1px solid var(--line); border-radius: 12px; box-shadow: var(--sh-2); padding: 5px; display: grid; gap: 2px; }
+  .stmenu button { border: 0; background: none; text-align: left; justify-content: flex-start; box-shadow: none; }
+  .stmenu button:hover { background: var(--sunk); }
+  .toast { position: fixed; left: 50%; bottom: 20px; transform: translate(-50%, 150%); background: var(--ink); color: var(--bg); padding: 10px 16px 10px 12px; border-radius: 14px;
+    font-weight: 600; font-size: 14px; display: flex; gap: 9px; align-items: center; box-shadow: 0 14px 30px rgba(0,0,0,.25); z-index: 40; opacity: 0;
+    transition: transform .3s cubic-bezier(.2,.9,.3,1.2), opacity .2s; }
+  .toast i { width: 22px; height: 22px; border-radius: 50%; background: var(--done); color: #fff; display: grid; place-items: center; font-style: normal; font-size: 12px; }
+  .toast.err i { background: var(--late); }
+  .toast.show { transform: translate(-50%, 0); opacity: 1; }
+  @media (prefers-reduced-motion: reduce) { .drawer, .scrim, .chev, .toast, .ring .ring-fg { transition: none; } }
+
+  /* ---------- Vista Tareas (desglose con IA) ---------- */
+  .defaults { display: flex; gap: 14px; flex-wrap: wrap; font-size: 13px; padding: 11px 16px; background: var(--accent-soft); border-radius: var(--r-sm); align-items: center; }
+  .defaults b { font-weight: 700; }
+  .tabs { display: flex; gap: 3px; background: var(--sunk); padding: 3px; border-radius: 11px; }
+  .tabs button { border: none; background: none; padding: 5px 12px; border-radius: 8px; color: var(--muted); box-shadow: none; }
+  .tabs button.on { background: var(--raised); color: var(--ink); box-shadow: var(--sh-1); }
+  .drop { border: 2px dashed var(--line); border-radius: var(--r-md); padding: 26px; text-align: center; color: var(--muted); cursor: pointer; }
   .drop.over { border-color: var(--accent); background: var(--accent-soft); }
-  .note { margin-top: 10px; padding: 8px 12px; border-radius: 8px; background: var(--ok-soft); font-size: 13px; }
-  .note.err { background: transparent; border: 1px solid var(--err); color: var(--err); }
-
   .filters { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
-  .filters select, .filters input { width: auto; }
+  .filters select, .filters input { width: auto; max-width: 220px; }
   .table-wrap { overflow-x: auto; }
   table { width: 100%; border-collapse: collapse; min-width: 1100px; }
-  th, td { text-align: left; padding: 5px 6px; border-bottom: 1px solid var(--border); vertical-align: middle; }
-  th { font-size: 12px; color: var(--muted); font-weight: 600; background: var(--row); }
-  tr.detail td { background: var(--row); padding: 10px 14px 14px 44px; }
+  th, td { text-align: left; padding: 6px 7px; border-bottom: 1px solid var(--line); vertical-align: middle; }
+  th { font-size: 12px; color: var(--faint); font-weight: 700; background: var(--sunk); }
+  tr.detail td { background: var(--sunk); padding: 10px 14px 14px 44px; }
   tr.sel td { background: var(--accent-soft); }
   td.num input { width: 64px; }
   td.date input { width: 138px; }
@@ -64,97 +338,145 @@
   .col-epic select { min-width: 170px; max-width: 230px; }
   .col-user select { min-width: 160px; max-width: 200px; }
   .col-sprint select { min-width: 130px; max-width: 170px; }
-  .filters select { max-width: 200px; }
   .detail-grid { display: grid; grid-template-columns: 2fr 1fr; gap: 10px; }
   .detail-grid label { font-size: 12px; color: var(--muted); display: grid; gap: 3px; }
-  .key { font-size: 12px; padding: 1px 6px; border-radius: 4px; border: 1px solid var(--ok); color: var(--ok); text-decoration: none; white-space: nowrap; }
+  .tk-tbl { overflow-x: auto; }
+  .tr.tk { grid-template-columns: 22px minmax(16rem, 1fr) 12rem 9rem 8.5rem 8rem; min-width: 900px; }
+  .tr.tk input[type=checkbox] { width: auto; accent-color: var(--accent); }
+  .tr.tk.chk { background: color-mix(in srgb, var(--accent-soft) 55%, transparent); }
+  .tk-meta { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; margin-top: 2px; }
+  .kind.nost { background: var(--prog-bg); color: var(--prog); }
+  .kind.ok { background: var(--done-bg); color: var(--done); }
+  .tk-name { font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .tk-sprint { font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  #tasksView .card > .card-head { padding: 14px 18px; }
+  .key { font-size: 12px; padding: 1px 7px; border-radius: 6px; background: var(--done-bg); color: var(--done); font-weight: 700; text-decoration: none; white-space: nowrap; }
   .pending { font-size: 12px; color: var(--muted); white-space: nowrap; }
-  .bulk { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; padding: 8px 14px; background: var(--accent-soft); border-bottom: 1px solid var(--border); }
+  .bulk { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; padding: 9px 18px; background: var(--accent-soft); border-bottom: 1px solid var(--line); }
   .bulk select, .bulk input { width: auto; }
-  .empty { color: var(--muted); text-align: center; padding: 40px 10px; }
   .results li { margin-bottom: 3px; }
-  .ok { color: var(--ok); } .err { color: var(--err); } .warn { color: var(--warn); }
-  .spinner { display: inline-block; width: 12px; height: 12px; border: 2px solid currentColor; border-top-color: transparent; border-radius: 50%; animation: spin 1s linear infinite; vertical-align: -2px; }
-  @keyframes spin { to { transform: rotate(360deg); } }
+  .push { border: 0; border-radius: 11px; padding: 7px 14px; font-weight: 700; }
+  .push.ready { background: linear-gradient(135deg, var(--accent), var(--accent-2)); color: var(--on-accent); box-shadow: 0 6px 16px -6px var(--accent); }
 
-  dialog { border: 1px solid var(--border); border-radius: 12px; background: var(--panel); color: var(--text); padding: 0; width: min(560px, calc(100vw - 32px)); }
-  dialog::backdrop { background: rgba(0,0,0,.35); }
-  .dlg-head { padding: 14px 18px; border-bottom: 1px solid var(--border); display: flex; align-items: center; }
-  .dlg-head h3 { margin: 0; font-size: 16px; flex: 1; }
-  .dlg-body { padding: 16px 18px; display: grid; gap: 12px; }
+  dialog { border: 1px solid var(--line); border-radius: var(--r-md); background: var(--panel); color: var(--ink); padding: 0; width: min(560px, calc(100vw - 32px)); box-shadow: var(--sh-2); }
+  dialog::backdrop { background: rgba(15,15,40,.35); backdrop-filter: blur(2px); }
+  .dlg-head { padding: 16px 20px; border-bottom: 1px solid var(--line); display: flex; align-items: center; }
+  .dlg-head h3 { margin: 0; font-size: 17px; flex: 1; }
+  .dlg-body { padding: 18px 20px; display: grid; gap: 12px; }
   .dlg-body label { display: grid; gap: 4px; font-size: 13px; font-weight: 600; }
   .dlg-body label span { font-weight: 400; color: var(--muted); font-size: 12px; }
   .two { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
-  .dlg-foot { padding: 12px 18px; border-top: 1px solid var(--border); display: flex; gap: 8px; justify-content: flex-end; flex-wrap: wrap; }
+  .dlg-foot { padding: 12px 20px; border-top: 1px solid var(--line); display: flex; gap: 8px; justify-content: flex-end; flex-wrap: wrap; }
   .epic-list { display: grid; gap: 6px; }
   .epic-list .r { display: flex; gap: 6px; align-items: center; }
 
-  .views button { border: none; background: none; padding: 6px 10px; border-radius: 6px; color: var(--muted); }
-  .views button.on { background: var(--accent-soft); color: var(--accent); font-weight: 600; }
-  .tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; margin-bottom: 14px; }
-  .tile { border: 1px solid var(--border); border-radius: 8px; padding: 10px 12px; }
-  .tile .v { font-size: 24px; font-weight: 650; font-variant-numeric: tabular-nums; }
+  /* ---------- Vista Avance del sprint ---------- */
+  .tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; margin: 10px 0 16px; }
+  .tile { border: 1px solid var(--line); border-radius: var(--r-md); padding: 13px 15px; background: var(--raised); box-shadow: var(--sh-1); }
+  .tile .v { font-size: 26px; font-weight: 800; font-variant-numeric: tabular-nums; letter-spacing: -.02em;
+    background: linear-gradient(135deg, var(--accent), var(--accent-2)); -webkit-background-clip: text; background-clip: text; color: transparent; }
+  /* Vista de gráficas: la tarjeta exterior es solo la barra de filtros; cada informe va en su caja */
+  .sp-card { background: none; border: 0; box-shadow: none; }
+  .sp-card > .card-head { background: var(--panel); border: 1px solid var(--line); border-radius: var(--r-md); box-shadow: var(--sh-1); }
+  .sp-card > .card-body { padding: 16px 0 0; display: grid; gap: 16px; }
+  .sp-box { padding: 20px 22px; }
+  .sp-two { display: grid; grid-template-columns: 1fr 1fr; gap: 22px; }
+  @media (max-width: 1000px) { .sp-two { grid-template-columns: 1fr; } }
+  #sprintView .perf, #sprintView .card:has(.perf) { border-radius: var(--r-md); }
   .tile .l { font-size: 12px; color: var(--muted); }
+  .tile .d { font-size: 12px; margin-top: 2px; }
   .chart { position: relative; }
   .chart svg { display: block; width: 100%; overflow: visible; }
   .chart text { font-size: 11px; fill: var(--muted); font-variant-numeric: tabular-nums; }
-  .chart-title { font-size: 13px; font-weight: 600; margin: 4px 0 2px; }
-  .tip { position: absolute; pointer-events: none; background: var(--panel); border: 1px solid var(--border); border-radius: 8px; padding: 7px 10px; font-size: 12px; box-shadow: 0 4px 14px rgba(0,0,0,.12); max-width: 320px; z-index: 2; }
+  .chart-title { font-size: 13px; font-weight: 700; margin: 4px 0 2px; }
+  .tip { position: absolute; pointer-events: none; background: var(--raised); border: 1px solid var(--line); border-radius: 10px; padding: 8px 11px; font-size: 12px; box-shadow: var(--sh-2); max-width: 320px; z-index: 2; }
   .tip b { font-variant-numeric: tabular-nums; }
+  .tip em { font-style: normal; display: inline-block; width: 9px; height: 9px; border-radius: 2px; margin-right: 6px; }
   .day-table { min-width: 0; width: auto; }
+  .day-table td, .day-table th { padding: 3px 12px 3px 0; font-variant-numeric: tabular-nums; }
   .burn-legend { display: flex; gap: 12px 32px; flex-wrap: wrap; padding-left: 36px; }
   .burn-legend div { display: flex; gap: 10px; }
   .burn-legend i { width: 30px; height: 3px; margin-top: 8px; flex-shrink: 0; }
   .burn-legend p { margin: 0; }
-  .burn-legend strong { display: block; font-weight: 600; }
+  .burn-legend strong { display: block; font-weight: 700; }
   .burn-legend span { font-size: 12px; color: var(--muted); }
-  .tip em { font-style: normal; display: inline-block; width: 9px; height: 9px; border-radius: 2px; margin-right: 6px; }
   .up { color: var(--done-line); } .add { color: var(--scope-line); }
   .legend { display: flex; gap: 16px; margin: 0 0 4px; }
   .legend i { display: inline-block; width: 16px; height: 2px; vertical-align: middle; margin-right: 6px; }
   .legend i.dash { background: repeating-linear-gradient(90deg, var(--muted) 0 6px, transparent 6px 10px); }
-  .day-table td, .day-table th { padding: 3px 12px 3px 0; font-variant-numeric: tabular-nums; }
-
-  .perf > summary { list-style: none; cursor: pointer; display: flex; align-items: center; gap: 10px; padding: 10px 14px; flex-wrap: wrap; }
+  .perf > summary { list-style: none; cursor: pointer; display: flex; align-items: center; gap: 10px; padding: 12px 18px; flex-wrap: wrap; }
   .perf > summary::-webkit-details-marker { display: none; }
   .perf > summary::before { content: '▸'; color: var(--muted); }
   .perf[open] > summary::before { content: '▾'; }
-  .perf[open] > summary { border-bottom: 1px solid var(--border); }
-  .tile .d { font-size: 12px; margin-top: 2px; }
+  .perf[open] > summary { border-bottom: 1px solid var(--line); }
   .perf-table td, .perf-table th { padding: 4px 14px 4px 0; font-variant-numeric: tabular-nums; white-space: nowrap; }
   .perf-table td.n, .perf-table th.n { text-align: right; }
   .perf-table tr.me td { background: var(--accent-soft); font-weight: 600; }
 
-  @media (max-width: 700px) {
+  @media (max-width: 760px) {
+    .rail { display: none; } .shell { margin-left: 0; } .kbar { display: none; }
     .topbar, main { padding-left: 16px; padding-right: 16px; }
     .two, .detail-grid { grid-template-columns: 1fr; }
   }
 </style>
 </head>
 <body>
+<nav class="rail" aria-label="Menú">
+  <button class="logo" onclick="setView('bandeja')" title="Ir a la bandeja" aria-label="Ir a la bandeja"><svg viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg></button>
+  <button id="nav-bandeja" onclick="setView('bandeja')" title="Bandeja: lo que necesita tu atención" aria-label="Bandeja">
+    <svg viewBox="0 0 24 24"><path d="M4 13l2.5-7h11L20 13v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1z"/><path d="M4 13h4l1.5 2.5h5L16 13h4"/></svg>
+    <span class="badge" id="mwBadge" hidden></span></button>
+  <button id="nav-tablero" onclick="setView('tablero')" title="Tablero por estado" aria-label="Tablero">
+    <svg viewBox="0 0 24 24"><rect x="3.5" y="4" width="5" height="16" rx="1.5"/><rect x="10" y="4" width="5" height="11" rx="1.5"/><rect x="16.5" y="4" width="4" height="7" rx="1.5"/></svg></button>
+  <button id="nav-tabla" onclick="setView('tabla')" title="Tabla con detalle" aria-label="Tabla">
+    <svg viewBox="0 0 24 24"><path d="M4 6h16M4 12h16M4 18h16"/></svg></button>
+  <span class="sep"></span>
+  <button id="nav-tasks" onclick="setView('tasks')" title="Desglose con IA y subida a Jira" aria-label="Desglose con IA">
+    <svg viewBox="0 0 24 24"><path d="M12 3l1.8 4.7L18.5 9.5l-4.7 1.8L12 16l-1.8-4.7L5.5 9.5l4.7-1.8z"/><path d="M18.5 15.5l.8 2 2 .8-2 .8-.8 2-.8-2-2-.8 2-.8z"/></svg></button>
+  <button id="nav-sprint" onclick="setView('sprint')" title="Avance del sprint" aria-label="Avance del sprint">
+    <svg viewBox="0 0 24 24"><path d="M4 19h16"/><path d="M5 15l4-4 3 3 6-7"/><path d="M15 7h3v3"/></svg></button>
+  <span class="grow"></span>
+  <button onclick="toggleTheme()" title="Modo claro / oscuro" aria-label="Cambiar entre modo claro y oscuro">
+    <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M12 2.8v2.4M12 18.8v2.4M4.2 7.5l2 1.2M17.8 15.3l2 1.2M4.2 16.5l2-1.2M17.8 8.7l2-1.2"/><circle cx="12" cy="12" r="7"/></svg></button>
+</nav>
+
+<div class="shell">
 <header class="topbar">
-  <h1>📋 Gestor de tareas</h1>
-  <nav class="views">
-    <button id="viewTasks" class="on" onclick="setView('tasks')">Tareas</button>
-    <button id="viewSprint" onclick="setView('sprint')">📈 Avance del sprint</button>
-  </nav>
-  <span class="status" id="jiraStatus">Conectando con Jira…</span>
+  <div class="crumbs" id="crumbs">Tareas</div>
+  <label class="kbar" id="kbar" title="Busca en tus tareas (Ctrl+K)"><svg class="ico" viewBox="0 0 24 24"><circle cx="11" cy="11" r="6.5"/><path d="M20 20l-4.2-4.2"/></svg>
+    <span class="sr">Buscar tareas</span><input id="gsearch" type="search" placeholder="Buscar tareas" oninput="mwGlobalSearch(this.value)"><kbd>Ctrl K</kbd></label>
   <span class="spacer"></span>
-  <label class="muted">IA
-    <select id="provider" style="width:auto">
-      <option value="claude_code">Claude (mi cuenta)</option>
-      <option value="claude">Claude (API key)</option>
-      <option value="ollama">Local (Ollama)</option>
-    </select>
-  </label>
-  <button onclick="openConfig()">⚙️ Configuración</button>
-  <button class="primary" id="pushBtn" onclick="pushToJira()">Subir a Jira</button>
+  <!-- Mis tareas -->
+  <div class="tb-group" id="tbMine">
+    <select id="mwUser" onchange="mwLoad()" title="Persona"></select>
+    <label class="check" title="Incluir lo cerrado en los últimos 14 días"><input type="checkbox" id="mwDone" onchange="mwLoad()"> Cerradas</label>
+    <button class="ghost" onclick="mwLoad()" title="Volver a leer de Jira">↻</button>
+    <button class="bell" onclick="mwDrawer()" title="Alertas">🔔 <span class="badge" id="mwBell" hidden></span></button>
+  </div>
+  <!-- Desglose con IA -->
+  <div class="tb-group" id="tbTasks" hidden>
+    <label class="muted" style="display:flex;gap:6px;align-items:center">IA
+      <select id="provider">
+        <option value="claude_code">Claude (mi cuenta)</option>
+        <option value="claude">Claude (API key)</option>
+        <option value="ollama">Local (Ollama)</option>
+      </select>
+    </label>
+    <button onclick="openConfig()">⚙️ Configuración</button>
+    <button class="push ready" id="pushBtn" onclick="pushToJira()">Subir a Jira</button>
+  </div>
+  <span class="status" id="jiraStatus">Conectando con Jira…</span>
+  <button class="avatar" id="avatar" title="" onclick="mwShowMine()" style="border:0;padding:0"></button>
 </header>
 
 <main id="sprintView" hidden>
-  <section class="card">
+  <div class="hero" id="spHero"><div class="hi"><p class="date" id="spHeroDates">Avance del sprint</p><h2 id="spHeroName">Sprint</h2>
+      <p id="spHeroSub">Leyendo de Jira…</p></div>
+    <div class="kpis"><div><b id="spK-pct">—</b><span>completado</span></div><div><b id="spK-pts">—</b><span>puntos cerrados</span></div>
+      <div><b id="spK-days">—</b><span>días hábiles</span></div><div><b id="spK-tasks">—</b><span>tareas</span></div></div></div>
+  <section class="card sp-card">
     <div class="card-head">
-      <h2>Avance del sprint</h2>
+      <h2>Informes del sprint</h2>
       <span class="muted" id="spRange"></span>
       <span class="spacer"></span>
       <div class="filters">
@@ -183,9 +505,64 @@
   </section>
 </main>
 
+<main id="mineView" hidden>
+  <div id="mwMsg"></div>
+  <!-- 1. Bandeja: lo que necesita atención primero -->
+  <section id="v-bandeja" hidden>
+    <div class="p1">
+      <div>
+        <div class="hero"><div class="hi"><p class="date" id="p1-date"></p><h2 id="p1-hello"></h2><p id="p1-sum"></p></div>
+          <div class="kpis"><div><b id="k-open"></b><span>abiertas</span></div><div class="kwarn"><b id="k-late"></b><span>vencidas</span></div><div><b id="k-days"></b><span id="k-days-l">días hábiles</span></div></div></div>
+        <div style="display:flex;gap:10px;align-items:center;margin-bottom:14px;flex-wrap:wrap">
+          <div class="seg" id="p1-scope"></div><span class="spacer"></span><span class="muted" id="p1-info"></span></div>
+        <div class="attn" id="attn"></div>
+        <div id="p1-epics"></div>
+      </div>
+      <aside class="side">
+        <div class="box">
+          <h3 id="p1-sprint-name">Sprint</h3>
+          <p class="sub" id="p1-left"></p>
+          <div class="ring" aria-hidden="true">
+            <svg viewBox="0 0 120 120"><defs><linearGradient id="rg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="var(--accent)"/><stop offset="1" stop-color="var(--accent-2)"/></linearGradient></defs>
+              <circle class="ring-bg" cx="60" cy="60" r="52"/><circle class="ring-fg" id="p1-ring" cx="60" cy="60" r="52"/></svg>
+            <div class="ring-c"><b id="p1-ringpct"></b><span>completado</span></div>
+          </div>
+          <div class="days" id="p1-days" aria-hidden="true"></div>
+          <p class="sub" style="margin:9px 0 0" id="p1-pct"></p>
+        </div>
+        <div class="box" id="p1-stats"></div>
+        <div class="box"><h3>Actividad</h3><p class="sub">Cambios de esta sesión</p><ul class="feed" id="feed"></ul></div>
+      </aside>
+    </div>
+  </section>
+
+  <!-- 2. Tablero por estado -->
+  <section id="v-tablero" hidden>
+    <div class="p2-head">
+      <h2 id="p2-title"></h2>
+      <span class="bar"><i id="p2-bar"></i></span>
+      <span class="due" id="p2-left"></span>
+      <span class="spacer"></span>
+      <div class="seg" id="p2-scope"></div>
+    </div>
+    <div style="margin:-6px 0 14px"><div class="seg" id="p2-epics"></div></div>
+    <div class="lanes" id="board"></div>
+    <p class="muted">Cada fila es una Historia con sus subtareas. Marca la casilla para finalizar una subtarea o arrástrala a otra columna;
+      la Historia se cierra con «Cerrar Historia» o con su estado en la cabecera.</p>
+  </section>
+
+  <!-- 3. Tabla con panel de detalle -->
+  <section id="v-tabla" hidden>
+    <div class="chips" id="p3-chips"></div>
+    <div class="tbl" id="p3-table"></div>
+    <p class="muted">Haz clic en una fila para ver y editar el detalle.</p>
+  </section>
+</main>
+
 <main id="tasksView">
-  <!-- Configuración activa -->
-  <div class="defaults" id="defaultsBar"></div>
+  <div class="hero" style="margin-bottom:0"><div class="hi"><p class="date">Desglose con IA</p><h2>Registra tu trabajo</h2>
+      <p id="defaultsBar"></p></div>
+    <div class="kpis"><div><b id="t-total">0</b><span>en el plan</span></div><div class="kwarn"><b id="t-pending">0</b><span>sin subir</span></div><div><b id="t-jira">0</b><span>ya en Jira</span></div></div></div>
 
   <!-- Nuevo desglose -->
   <section class="card">
@@ -248,6 +625,7 @@
     <div class="table-wrap" id="tableWrap"></div>
   </section>
 </main>
+</div>
 
 <!-- Configuración -->
 <dialog id="cfgDlg">
@@ -255,7 +633,8 @@
   <div class="dlg-body">
     <p class="muted" style="margin:0">Se aplican a cada tarea nueva. Las fechas vacías son automáticas: inicio hoy y fin el último día del mes. Si el texto nombra a otra persona del equipo (p.ej. "Ana hizo…"), la IA se la asigna a ella. Luego puedes cambiar todo en cada tarea.</p>
     <label>Responsable <select id="cAssignee"></select></label>
-    <label>Sprint <select id="cSprint" onchange="sprintDates()"></select><span id="cSprintHint"></span></label>
+    <label>Sprint <select id="cSprint" onchange="sprintDates()"></select><span id="cSprintHint"></span>
+      <span>Solo para tareas sin Historia: las subtareas van en el sprint de su Historia.</span></label>
     <div class="two">
       <label>Fecha de inicio <input type="date" id="cStart"><span id="cStartHint"></span></label>
       <label>Fecha de finalización <input type="date" id="cDue"><span id="cDueHint"></span></label>
@@ -278,9 +657,35 @@
   <div class="dlg-foot"><button class="primary" onclick="$('epicDlg').close()">Listo</button></div>
 </dialog>
 
+<!-- Detalle y edición de una Historia o subtarea (Mis tareas) -->
+<div class="scrim" id="scrim" onclick="mwClose(); tkClose()"></div>
+<aside class="drawer" id="tkDetail" aria-label="Editar tarea del plan" aria-hidden="true"></aside>
+<aside class="drawer" id="mwDetail" aria-label="Detalle de la tarea" aria-hidden="true"></aside>
+
+<!-- Panel lateral de alertas (Mis tareas) -->
+<aside id="mwDrawer" class="drawer narrow" aria-label="Alertas">
+  <div class="dr-h"><div><h3 style="margin:0">🔔 Alertas</h3><span class="muted" id="mwAlertInfo"></span></div>
+    <button class="x" onclick="mwDrawer(false)" title="Cerrar">✕</button></div>
+  <div style="padding:10px 20px;border-bottom:1px solid var(--line)"><label class="check">Por vencer en
+    <select id="mwSoon" style="width:auto" onchange="mwSetSoon(this.value)">
+      <option value="1">1 día hábil</option><option value="3">3 días hábiles</option><option value="5">5 días hábiles</option><option value="10">10 días hábiles</option>
+    </select></label></div>
+  <div class="dr-b" id="mwAlerts" style="gap:2px"><div class="muted">Cargando…</div></div>
+</aside>
+
+<div class="stmenu" id="stMenu" hidden></div>
+<div class="toast" id="toast" role="status" aria-live="polite"><i>✓</i><span></span></div>
+
+<!-- Confirmación genérica (Mis tareas) -->
+<dialog id="askDlg">
+  <div class="dlg-head"><h3 id="askTitle"></h3></div>
+  <div class="dlg-body" id="askBody"></div>
+  <div class="dlg-foot" id="askFoot"></div>
+</dialog>
+
 <script>
 let cfg = null, ws = null, mode = 'text', pickedFiles = [], saveTimer = null, lastResults = null;
-const selected = new Set(), expanded = new Set();
+const selected = new Set();
 const $ = (id) => document.getElementById(id);
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const newId = () => Math.random().toString(16).slice(2, 12);
@@ -295,7 +700,11 @@ async function api(path, opts = {}) {
   const isForm = opts.body instanceof FormData;
   const r = await fetch(path, { ...opts, headers: opts.body && !isForm ? {'Content-Type': 'application/json'} : {} });
   const data = await r.json().catch(() => ({}));
-  if (!r.ok) throw new Error(data.detail || r.statusText);
+  if (!r.ok) {
+    const err = new Error(typeof data.detail === 'string' ? data.detail : data.detail?.message || r.statusText);
+    err.status = r.status; err.data = data.detail;
+    throw err;
+  }
   return data;
 }
 
@@ -330,16 +739,24 @@ async function init() {
   $('provider').onchange = () => localStorage.setItem('provider', $('provider').value);
   ws = await api('/api/state');
   renderJiraStatus(); renderAll();
-  let v = location.hash === '#sprint' ? 'sprint' : null;
+  // Vista inicial: la del enlace, si no la última usada, si no la bandeja
+  const fromHash = Object.keys(VIEW_HASH).find(k => VIEW_HASH[k] === location.hash) || (location.hash === '#mis-tareas' ? 'bandeja' : null);
+  let v = fromHash;
   try { v = v || localStorage.getItem('view'); } catch {}
-  if (v === 'sprint') setView('sprint');
+  if (v === 'mine') v = 'bandeja';
+  setView(v || 'bandeja');
+  if (cfg.jira && !MINE_VIEWS.includes(v || 'bandeja')) { mwInitUsers(); mwLoad(); }  // en segundo plano, para el contador de alertas
 }
 
 function renderJiraStatus() {
   const j = cfg.jira;
+  $('avatar').textContent = j ? initials(j.me) : '?'; $('avatar').title = j ? `${j.me} · ver mis tareas` : '';
+  const read = MINE_VIEWS.includes(mw.view) && mw.loadedAt && !$('mineView').hidden
+    ? ` · leído ${mw.loadedAt.toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit' })}` : '';
   $('jiraStatus').innerHTML = j
-    ? `<span class="dot" style="background:var(--ok)"></span>Jira <b>${esc(j.project)}</b> · ${j.users.length} personas · ${j.epics.length} épicas · ${j.sprints.length} sprints <button class="ghost" onclick="refreshJira()" title="Recargar datos de Jira">↻</button>`
-    : `<span class="dot" style="background:var(--err)"></span><span title="${esc(cfg.jira_error)}">Jira no conectado (revisa .env)</span> <button class="ghost" onclick="refreshJira()">↻</button>`;
+    ? `<span class="sync" title="${j.users.length} personas · ${j.epics.length} épicas · ${j.sprints.length} sprints">Jira ${esc(j.project)}${read}</span>
+       <button class="ghost" onclick="refreshJira()" title="Recargar datos de Jira">↻</button>`
+    : `<span class="sync off" title="${esc(cfg.jira_error)}">Jira no conectado (revisa .env)</span> <button class="ghost" onclick="refreshJira()">↻</button>`;
 }
 async function refreshJira() { cfg = await api('/api/config?refresh=true'); renderJiraStatus(); renderAll(); }
 
@@ -348,11 +765,10 @@ function renderAll() { renderDefaults(); renderFilters(); renderTasks(); }
 // ---------- Configuración ----------
 function renderDefaults() {
   const d = ws.defaults;
-  $('defaultsBar').innerHTML = `<span>Las tareas nuevas se crean con →</span>
-    <span>👤 <b>${esc(d.assignee_name || 'Sin responsable')}</b></span>
-    <span>🏃 <b>${esc(d.sprint_name || 'Sin sprint')}</b></span>
-    <span>📅 <b>${d.start_date ? fmtDate(d.start_date) : `hoy (${fmtDate(autoStart())})`}</b> → <b>${d.due_date ? fmtDate(d.due_date) : `fin de mes (${fmtDate(autoDue())})`}</b></span>
-    <button class="ghost" style="color:var(--accent)" onclick="openConfig()">Cambiar</button>`;
+  $('defaultsBar').innerHTML = `Las tareas nuevas se crean para 👤 <b>${esc(d.assignee_name || 'sin responsable')}</b>
+    en 🏃 <b>${esc(d.sprint_name || 'ningún sprint')}</b> (si no tienen Historia; si la tienen, van como subtareas en su sprint), del 📅 <b>${d.start_date ? fmtDate(d.start_date) : `hoy (${fmtDate(autoStart())})`}</b>
+    al <b>${d.due_date ? fmtDate(d.due_date) : `fin de mes (${fmtDate(autoDue())})`}</b>.
+    <button class="hero-link" onclick="openConfig()">Cambiar</button>`;
 }
 function userOptions(selectedId, empty = '— Sin responsable —', selectedName = null) {
   const missing = selectedId && !users().some(u => u.accountId === selectedId);
@@ -457,19 +873,51 @@ async function breakdownText() {
     const r = await api('/api/breakdown/text', { method: 'POST', body: JSON.stringify({ text, provider: $('provider').value }) });
     ws = r.workspace; renderAll(); $('input').value = '';
     setBusy(false); showNote(`✅ ${r.added} tareas nuevas añadidas${r.skipped ? ` (${r.skipped} repetidas omitidas)` : ''}. ${r.note}`);
+    showDupes(r.duplicates); showToClose(r.to_close);
   } catch (e) { setBusy(false); showNote('Error: ' + e.message, true); }
 }
 async function breakdownFiles() {
   await flushSave();
-  let total = 0, skipped = 0; const notes = [];
+  let total = 0, skipped = 0; const notes = [], toClose = [], dupes = [];
   for (const [i, f] of pickedFiles.entries()) {
     setBusy(true, `Desglosando ${esc(f.name)} (${i + 1}/${pickedFiles.length})…`);
     const fd = new FormData(); fd.append('file', f); fd.append('provider', $('provider').value);
-    try { const r = await api('/api/breakdown/file', { method: 'POST', body: fd }); ws = r.workspace; total += r.added; skipped += r.skipped; notes.push(`${f.name}: ${r.note}`); renderAll(); }
+    try { const r = await api('/api/breakdown/file', { method: 'POST', body: fd }); ws = r.workspace; total += r.added; skipped += r.skipped; notes.push(`${f.name}: ${r.note}`); toClose.push(...r.to_close); dupes.push(...r.duplicates); renderAll(); }
     catch (e) { setBusy(false); showNote(`Error en ${f.name}: ${e.message}`, true); return; }
   }
   pickFiles([]); $('fileInput').value = '';
   setBusy(false); showNote(`✅ ${total} tareas nuevas añadidas${skipped ? ` (${skipped} repetidas omitidas)` : ''}. ${notes.join(' · ')}`);
+  showDupes(dupes); showToClose(toClose.filter((x, i) => toClose.findIndex(y => y.key === x.key) === i));
+}
+// Tareas que la IA propuso pero ya existían (en Jira o en la lista): se omitieron; se dice con cuál coinciden
+function showDupes(list) {
+  if (!list?.length) return;
+  const link = (k) => cfg?.jira ? `<a href="${cfg.jira.base_url}/browse/${k}" target="_blank" rel="noopener">${k}</a>` : k;
+  $('note').insertAdjacentHTML('beforeend', `<details class="note" style="margin-top:8px"><summary><b>${list.length} omitida${list.length > 1 ? 's' : ''} por repetida${list.length > 1 ? 's' : ''}</b>
+    <span class="muted">· ya existían, no se crearon</span></summary><ul style="margin:6px 0 0;padding-left:18px;font-size:13px">
+    ${list.map(d => `<li>${esc(cleanTitle(d.summary))} <span class="muted">→ ${d.key ? `ya está en Jira como ${link(d.key)}${d.parent ? ` (en ${link(d.parent)})` : ''}` : 'ya está en la lista'}${
+      norm(d.existing) !== norm(d.summary) ? ` «${esc(cleanTitle(d.existing))}»` : ''}</span></li>`).join('')}</ul></details>`);
+}
+// Subtareas que ya estaban planificadas en Jira y el texto da por hechas: se ofrecen para cerrarlas
+function showToClose(list) {
+  if (!list?.length) return;
+  $('note').insertAdjacentHTML('beforeend', `<div class="note" id="toClose" style="background:var(--accent-soft)">
+    <b>Ya hiciste ${list.length === 1 ? 'esta subtarea planificada' : `estas ${list.length} subtareas planificadas`}</b>
+    <span class="muted"> (ya existen en Jira; no se crean de nuevo)</span>
+    ${list.map(x => `<label class="check" style="margin-top:6px;color:var(--ink);font-size:13px"><input type="checkbox" checked value="${esc(x.key)}">
+      <span><b>${esc(x.key)}</b> ${esc(x.summary)} <span class="muted">· en ${esc(x.story_key)} ${esc(x.story.slice(0, 50))}</span></span></label>`).join('')}
+    <div style="margin-top:8px"><button class="primary" onclick="closeDone()">Marcarlas como finalizadas en Jira</button></div></div>`);
+}
+async function closeDone() {
+  const keys = [...document.querySelectorAll('#toClose input:checked')].map(i => i.value), done = [], failed = [];
+  if (!keys.length) return;
+  for (const k of keys) {
+    try { await api(`/api/issues/${k}/status`, { method: 'POST', body: JSON.stringify({ category: 'done' }) }); done.push(k); }
+    catch (e) { failed.push(`${k}: ${e.message}`); }
+  }
+  $('toClose').outerHTML = `<div class="note ${failed.length ? 'err' : ''}">${done.length ? `✅ Finalizadas: ${done.join(', ')}.` : ''}${failed.length ? ` No se pudo: ${esc(failed.join(' · '))}` : ''}</div>`;
+  api('/api/config?refresh=true').then(c => { cfg = c; }).catch(() => {});
+  if (mw.data) mwLoad();
 }
 $('input').addEventListener('keydown', e => { if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) breakdownText(); });
 
@@ -495,48 +943,115 @@ function renderTotals() {
   const pts = vis.reduce((a, { t }) => a + (Number(t.story_points) || 0), 0);
   const pending = all.filter(x => !x.t.jira_key).length;
   $('totals').textContent = all.length ? `${vis.length} de ${all.length} · ${pts} pts · ${pending} pendientes de subir` : '';
-  $('pushBtn').textContent = pending ? `Subir a Jira (${pending})` : 'Subir a Jira';
+  // Como en el diseño: el botón solo se enciende cuando hay algo pendiente de subir
+  $('pushBtn').textContent = pending ? `Subir ${pending} a Jira` : 'Sin cambios';
+  $('t-total').textContent = all.length; $('t-pending').textContent = pending; $('t-jira').textContent = all.length - pending;
+  const loose = all.filter(x => !x.t.jira_key && !x.t.parent_key).length;
+  if (loose) $('totals').textContent += ` · ${loose} sin Historia`;
+  $('pushBtn').classList.toggle('ready', pending > 0);
 }
 
+// Lista del plan agrupada por épica (como la Tabla de Mis tareas); cada tarea se edita en su panel lateral
+let tkSel = null;
+const stories = () => cfg?.jira?.stories || [];
+const subTypeName = () => (cfg?.jira?.issue_types || []).find(t => t.level === -1)?.name || 'Subtarea';
+function storyOptions(t) {
+  const groups = {};
+  for (const h of stories()) (groups[h.epic || 'Sin épica'] ||= []).push(h);
+  const missing = t.parent_key && !stories().some(h => h.key === t.parent_key);
+  return '<option value="">— Sin Historia (se sube como tarea suelta) —</option>'
+    + (missing ? `<option value="${esc(t.parent_key)}" selected>${esc(t.parent_key)} · ${esc(t.parent_summary || '')} (cerrada o no encontrada)</option>` : '')
+    + Object.entries(groups).sort(([a], [b]) => a.localeCompare(b)).map(([ep, hs]) => `<optgroup label="${esc(ep)}">${hs.map(h =>
+      `<option value="${h.key}" ${h.key === t.parent_key ? 'selected' : ''}>${h.key} · ${esc(h.summary.slice(0, 70))}</option>`).join('')}</optgroup>`).join('');
+}
+// Con Historia la tarea pasa a la épica de esa Historia y se sube como subtarea (1 punto, sin sprint)
+function setStory(id, key) {
+  const { t } = findTask(id), h = stories().find(h => h.key === key);
+  if (!key) { Object.assign(t, { parent_key: null, parent_summary: null, issue_type: stdTypes()[0] }); }
+  else {
+    Object.assign(t, { parent_key: key, parent_summary: h?.summary || t.parent_summary, issue_type: subTypeName(),
+                       story_points: null, sprint_id: null, sprint_name: null });
+    if (h?.epic_key) moveTask(id, 'jira:' + h.epic_key);
+  }
+  queueSave(); renderAll();
+}
+const planEpicColor = (e) => EPIC_COLORS[Math.max(0, ws.plan.epics.indexOf(e)) % EPIC_COLORS.length];
 function renderTasks() {
   const all = allTasks(), vis = visibleTasks();
   for (const id of [...selected]) if (!findTask(id)) selected.delete(id);
   renderTotals(); renderBulk(); renderResults();
-
+  if (tkSel && !findTask(tkSel)) tkClose();
   if (!all.length) { $('tableWrap').innerHTML = '<div class="empty">Aún no hay tareas. Escribe lo que hiciste o sube un .txt arriba y pulsa <b>Desglosar</b>.</div>'; return; }
   if (!vis.length) { $('tableWrap').innerHTML = '<div class="empty">Ninguna tarea coincide con los filtros.</div>'; return; }
-
-  const allSel = vis.every(({ t }) => selected.has(t.id));
-  let html = `<table><thead><tr>
-      <th style="width:30px"><input type="checkbox" ${allSel ? 'checked' : ''} onchange="selectAll(this.checked)" title="Seleccionar todas"></th>
-      <th class="col-title">Tarea</th><th>Épica</th><th>Responsable</th><th>Sprint</th>
-      <th>Inicio</th><th>Fin</th><th>Pts</th><th>Jira</th><th></th></tr></thead><tbody>`;
-  for (const { t, e } of vis) {
-    const warnUser = t.assignee_name && !t.assignee_id;
-    html += `<tr class="${selected.has(t.id) ? 'sel' : ''}">
-      <td><input type="checkbox" ${selected.has(t.id) ? 'checked' : ''} onchange="toggleSel('${t.id}', this.checked)"></td>
-      <td class="col-title"><div style="display:flex;gap:4px;align-items:center">
-        <button class="ghost" onclick="toggleDetail('${t.id}')" title="Descripción y más campos">${expanded.has(t.id) ? '▾' : '▸'}</button>
-        <input class="cell-input" value="${esc(t.summary)}" placeholder="Título de la tarea" oninput="setField('${t.id}','summary',this.value)"></div></td>
-      <td class="col-epic"><select class="cell-input" onchange="changeEpic('${t.id}', this.value)">
-        ${epicOptions(e.id, { withNew: true })}</select></td>
-      <td class="col-user"><select class="cell-input" onchange="setAssignee('${t.id}', this.value)" ${warnUser ? 'style="color:var(--warn)"' : ''}>
-        ${warnUser ? `<option value="" selected>⚠ ${esc(t.assignee_name)} (no está en Jira)</option>` : ''}${warnUser ? userOptions(null) : userOptions(t.assignee_id, undefined, t.assignee_name)}</select></td>
-      <td class="col-sprint"><select class="cell-input" onchange="setSprint('${t.id}', this.value)">${sprintOptions(t.sprint_id, undefined, t.sprint_name)}</select></td>
-      <td class="date"><input class="cell-input" type="date" value="${t.start_date || ''}" onchange="setDate('${t.id}','start_date',this)"></td>
-      <td class="date"><input class="cell-input" type="date" value="${t.due_date || ''}" onchange="setDate('${t.id}','due_date',this)"></td>
-      <td class="num"><input class="cell-input" type="number" min="0" step="0.5" value="${t.story_points ?? ''}" oninput="setField('${t.id}','story_points',this.value)"></td>
-      <td>${t.jira_key ? `<a class="key" target="_blank" href="${browse(t.jira_key)}">${esc(t.jira_key)}</a>` : '<span class="pending">pendiente</span>'}</td>
-      <td><button class="ghost" title="Eliminar tarea" onclick="deleteTasks(['${t.id}'])">🗑</button></td></tr>`;
-    if (expanded.has(t.id)) html += `<tr class="detail"><td colspan="10"><div class="detail-grid">
-        <label>Descripción<textarea rows="5" oninput="setField('${t.id}','description',this.value)">${esc(t.description)}</textarea></label>
-        <div style="display:grid;gap:8px;align-content:start">
-          <label>Tipo<select onchange="setField('${t.id}','issue_type',this.value)">${[...new Set([...stdTypes(), t.issue_type].filter(Boolean))].map(v => `<option ${v === t.issue_type ? 'selected' : ''}>${esc(v)}</option>`).join('')}</select></label>
-          <label>Prioridad<select onchange="setField('${t.id}','priority',this.value)"><option value="">— Por defecto —</option>${[...new Set([...priorities(), t.priority].filter(Boolean))].map(v => `<option ${v === t.priority ? 'selected' : ''}>${esc(v)}</option>`).join('')}</select></label>
-          <label>Etiquetas<input value="${esc(t.labels.join(', '))}" placeholder="separadas por coma" oninput="setField('${t.id}','labels',this.value)"></label>
-        </div></div></td></tr>`;
+  const allSel = vis.every(({ t }) => selected.has(t.id)), groups = new Map();
+  for (const x of vis) (groups.get(x.e) || groups.set(x.e, []).get(x.e)).push(x.t);
+  let html = `<div class="tr th tk"><span><input type="checkbox" ${allSel ? 'checked' : ''} onchange="selectAll(this.checked)" title="Seleccionar todas"></span>
+    <span>Tarea</span><span>Responsable</span><span>Sprint</span><span>Fechas</span><span>Jira</span></div>`;
+  for (const [e, ts] of groups) {
+    html += `<div class="grp" style="--ec:${planEpicColor(e)}">${esc(e.summary)} <span class="muted" style="font-weight:600">${e.jira_key || 'nueva'} · ${ts.length}</span></div>`;
+    html += ts.map(t => {
+      const warnUser = t.assignee_name && !t.assignee_id, bad = t.start_date && t.due_date && t.start_date > t.due_date;
+      return `<div class="tr item tk ${selected.has(t.id) ? 'chk' : ''} ${tkSel === t.id ? 'sel' : ''}" id="tk-${t.id}" onclick="tkOpen('${t.id}')" tabindex="0"
+          onkeydown="if (event.key === 'Enter') tkOpen('${t.id}')">
+        <span onclick="event.stopPropagation()"><input type="checkbox" ${selected.has(t.id) ? 'checked' : ''} onchange="toggleSel('${t.id}', this.checked)"></span>
+        <div class="ttl"><b title="${esc(t.summary)}">${esc(cleanTitle(t.summary).trim()) || '<span class="muted">Sin título</span>'}</b>
+          <span class="ikey tk-meta">${t.parent_key ? `<span class="kind sp" title="Se sube como subtarea de esta Historia">↳ ${esc(t.parent_key)} · ${esc((t.parent_summary || '').slice(0, 48))}</span>`
+            : '<span class="kind nost" title="No está en ninguna Historia: se subirá como tarea suelta de la épica">Sin Historia</span>'}${t.done ? '<span class="kind ok">✓ Hecha</span>' : ''}
+            ${esc(t.issue_type || '')}${t.story_points != null ? ` · ${num(t.story_points)} pts` : ''}${t.priority ? ' · ' + esc(t.priority) : ''}</span></div>
+        <span class="who">${t.assignee_name ? `<span class="mav">${esc(initials(t.assignee_name))}</span><span class="tk-name ${warnUser ? 'warn' : ''}"
+          title="${warnUser ? 'No está en Jira' : ''}">${warnUser ? '⚠ ' : ''}${esc(t.assignee_name)}</span>` : '<span class="muted">Sin responsable</span>'}</span>
+        <span class="tk-sprint">${t.parent_key ? '<span class="muted" title="Las subtareas van en el sprint de su Historia">de su Historia</span>'
+          : t.sprint_name ? esc(t.sprint_name) : '<span class="muted">Sin sprint</span>'}</span>
+        <span class="due ${bad ? 'late' : ''}" title="${bad ? 'El inicio es posterior al fin' : ''}">${shortDate(t.start_date) || '—'} → ${shortDate(t.due_date) || '—'}</span>
+        <span>${t.jira_key ? `<a class="key" target="_blank" href="${browse(t.jira_key)}" onclick="event.stopPropagation()">${esc(t.jira_key)}</a>`
+          : '<span class="pill s-new">Pendiente</span>'}</span></div>`;
+    }).join('');
   }
-  $('tableWrap').innerHTML = html + '</tbody></table>';
+  $('tableWrap').innerHTML = `<div class="tk-tbl">${html}</div>`;
+}
+
+function tkOpen(id) {
+  const x = findTask(id);
+  if (!x) return tkClose();
+  const { t, e } = x, opts = (list, cur) => list.map(v => `<option ${v === cur ? 'selected' : ''}>${esc(v)}</option>`).join('');
+  tkSel = id;
+  $('tkDetail').innerHTML = `<div class="dr-h"><div><span class="etag" style="--ec:${planEpicColor(e)}">${esc(e.summary)}</span>
+      <h3>${esc(cleanTitle(t.summary).trim()) || 'Tarea sin título'}</h3>
+      <span class="ikey">${t.jira_key ? `<a class="ikey" target="_blank" href="${browse(t.jira_key)}">${esc(t.jira_key)} ↗</a> · ya está en Jira` : 'Pendiente de subir a Jira'}</span></div>
+    <button class="x" onclick="tkClose()" aria-label="Cerrar">✕</button></div>
+    <div class="dr-b">
+      <label class="dr-label">Título<textarea rows="2" oninput="setField('${id}', 'summary', this.value)" onchange="renderTasks(); tkOpen('${id}')">${esc(t.summary)}</textarea></label>
+      <dl class="fields">
+        <dt>Historia</dt><dd><select onchange="setStory('${id}', this.value); tkOpen('${id}')">${storyOptions(t)}</select></dd>
+        <dt>Épica</dt><dd><select onchange="changeEpic('${id}', this.value); tkOpen('${id}')" ${t.parent_key ? 'disabled title="Es la de su Historia"' : ''}>${epicOptions(e.id, { withNew: true })}</select></dd>
+        <dt>Responsable</dt><dd><select onchange="setAssignee('${id}', this.value); renderTasks()">${userOptions(t.assignee_id, undefined, t.assignee_name)}</select></dd>
+        ${t.parent_key ? '' : `<dt>Sprint</dt><dd><select onchange="setSprint('${id}', this.value); renderTasks()">${sprintOptions(t.sprint_id, undefined, t.sprint_name)}</select></dd>`}
+        <dt>Inicio</dt><dd><input type="date" value="${t.start_date || ''}" onchange="setDate('${id}', 'start_date', this); renderTasks()"></dd>
+        <dt>Fin</dt><dd><input type="date" value="${t.due_date || ''}" onchange="setDate('${id}', 'due_date', this); renderTasks()"></dd>
+        ${t.parent_key ? '' : `<dt>Puntos</dt><dd><input type="number" min="0" step="0.5" value="${t.story_points ?? ''}" oninput="setField('${id}', 'story_points', this.value)" onchange="renderTasks()"></dd>
+        <dt>Tipo</dt><dd><select onchange="setField('${id}', 'issue_type', this.value); renderTasks()">${opts([...new Set([...stdTypes(), t.issue_type].filter(Boolean))], t.issue_type)}</select></dd>`}
+        <dt>Estado</dt><dd><label class="check" style="font-size:14px;color:var(--ink)"><input type="checkbox" ${t.done ? 'checked' : ''}
+          onchange="findTask('${id}').t.done = this.checked; queueSave(); renderTasks()"> Ya está hecha (se sube como Finalizada)</label></dd>
+        <dt>Prioridad</dt><dd><select onchange="setField('${id}', 'priority', this.value); renderTasks()"><option value="">— Por defecto —</option>${opts([...new Set([...priorities(), t.priority].filter(Boolean))], t.priority)}</select></dd>
+        <dt>Etiquetas</dt><dd><input value="${esc(t.labels.join(', '))}" placeholder="separadas por coma" oninput="setField('${id}', 'labels', this.value)"></dd>
+      </dl>
+      <label class="dr-label">Descripción<textarea rows="8" oninput="setField('${id}', 'description', this.value)" onchange="renderTasks()">${esc(t.description)}</textarea></label>
+      <p class="muted" style="margin:0">${t.parent_key ? 'Se sube como <b>subtarea</b> de su Historia: 1 punto y en el sprint de la Historia.'
+        : 'No está en ninguna Historia: se sube como <b>tarea suelta</b> de la épica. Si corresponde a una tarea del Planner, elige su Historia arriba.'}
+        Los cambios se guardan solos en esta lista; a Jira llegan al subir la tarea.</p>
+    </div>
+    <div class="dr-f"><button class="danger" onclick="deleteTasks(['${id}'])">Eliminar</button><span class="spacer"></span>
+      <button onclick="tkClose()">Cerrar</button>
+      <button class="primary" onclick="pushToJira(['${id}'])">${t.jira_key ? 'Actualizar en Jira' : 'Subir a Jira'}</button></div>`;
+  $('tkDetail').classList.add('open'); $('scrim').classList.add('open'); $('tkDetail').setAttribute('aria-hidden', 'false');
+  document.querySelectorAll('.tr.tk.sel').forEach(r => r.classList.remove('sel'));
+  $('tk-' + id)?.classList.add('sel');
+}
+function tkClose() {
+  tkSel = null;
+  $('tkDetail').classList.remove('open'); $('tkDetail').setAttribute('aria-hidden', 'true');
+  if (!mw.selected) $('scrim').classList.remove('open');
+  document.querySelectorAll('.tr.tk.sel').forEach(r => r.classList.remove('sel'));
 }
 
 function renderBulk() {
@@ -640,8 +1155,7 @@ function addTask() {
   const d = effDefaults(), t = { id: newId(), summary: epic.summary + ' - ', description: '', issue_type: stdTypes()[0], story_points: POINTS,
     assignee_id: d.assignee_id, assignee_name: d.assignee_name, sprint_id: d.sprint_id, sprint_name: d.sprint_name,
     start_date: d.start_date, due_date: d.due_date, priority: null, labels: [], jira_key: null };
-  epic.tasks.unshift(t); queueSave(); renderAll();
-  document.querySelector('#tableWrap tbody tr .col-title input')?.focus();
+  epic.tasks.unshift(t); queueSave(); renderAll(); tkOpen(t.id);
 }
 function deleteTasks(ids) {
   const inJira = ids.filter(id => findTask(id)?.t.jira_key).length;
@@ -651,7 +1165,6 @@ function deleteTasks(ids) {
 }
 function toggleSel(id, on) { on ? selected.add(id) : selected.delete(id); renderTasks(); }
 function selectAll(on) { visibleTasks().forEach(({ t }) => on ? selected.add(t.id) : selected.delete(t.id)); renderTasks(); }
-function toggleDetail(id) { expanded.has(id) ? expanded.delete(id) : expanded.add(id); renderTasks(); }
 function applyBulk() {
   const u = users().find(u => u.accountId === $('bUser').value), s = sprints().find(s => s.id === Number($('bSprint').value));
   const start = $('bStart').value, due = $('bDue').value, epicId = $('bEpic').value;
@@ -704,12 +1217,16 @@ async function pushToJira(onlyIds) {
   const nNew = tasks.filter(t => !t.jira_key).length, nUpd = tasks.length - nNew;
   const noUser = tasks.filter(t => !t.assignee_id).length, empty = tasks.filter(t => !t.summary.trim()).length;
   if (empty) return alert(`${empty} tarea(s) no tienen título.`);
-  if (!confirm(`Proyecto ${cfg.jira.project}:\n• ${nNew} tareas nuevas\n• ${nUpd} ya existentes se actualizarán${noUser ? `\n• ${noUser} sin responsable` : ''}\n\n¿Subir a Jira?`)) return;
+  const nSub = tasks.filter(t => !t.jira_key && t.parent_key).length, nLoose = nNew - nSub, nDone = tasks.filter(t => !t.jira_key && t.done).length;
+  if (!confirm(`Proyecto ${cfg.jira.project}:\n• ${nSub} subtareas nuevas en sus Historias${nLoose ? `\n• ${nLoose} tareas sueltas nuevas (sin Historia)` : ''}`
+    + `${nDone ? `\n• ${nDone} se marcarán como Finalizadas` : ''}\n• ${nUpd} ya existentes se actualizarán${noUser ? `\n• ${noUser} sin responsable` : ''}\n\n¿Subir a Jira?`)) return;
   await flushSave();
   $('pushBtn').disabled = true; $('pushBtn').innerHTML = '<span class="spinner"></span> Subiendo…';
   try {
     const r = await api('/api/push', { method: 'POST', body: JSON.stringify({ plan: ws.plan, only_ids: onlyIds || null }) });
     ws = r.workspace; lastResults = r.results; selected.clear(); renderAll();
+    // Las Historias ya tienen subtareas nuevas: se recargan para que la IA no las repita en el próximo desglose
+    api('/api/config?refresh=true').then(c => { cfg = c; renderJiraStatus(); }).catch(() => {});
   } catch (e) { alert('Error de Jira: ' + e.message); }
   finally { $('pushBtn').disabled = false; renderTotals(); }
 }
@@ -720,10 +1237,22 @@ const parseDay = (d) => { const [y, m, dd] = d.split('-').map(Number); return ne
 const isWeekend = (dt) => dt.getDay() === 0 || dt.getDay() === 6;
 const WD = ['dom', 'lun', 'mar', 'mié', 'jue', 'vie', 'sáb'];
 
+const VIEW_TITLES = { bandeja: 'Bandeja', tablero: 'Tablero', tabla: 'Tabla', tasks: 'Desglose con IA', sprint: 'Avance del sprint' };
+const VIEW_HASH = { bandeja: '#bandeja', tablero: '#tablero', tabla: '#tabla', tasks: '#tareas', sprint: '#sprint' };
 function setView(v) {
-  $('tasksView').hidden = v !== 'tasks'; $('sprintView').hidden = v !== 'sprint';
-  $('viewTasks').classList.toggle('on', v === 'tasks'); $('viewSprint').classList.toggle('on', v === 'sprint');
+  if (!VIEW_TITLES[v]) v = 'bandeja';
+  const mine = MINE_VIEWS.includes(v);
+  $('tasksView').hidden = v !== 'tasks'; $('sprintView').hidden = v !== 'sprint'; $('mineView').hidden = !mine;
+  for (const k of MINE_VIEWS) $('v-' + k).hidden = k !== v;
+  for (const k of Object.keys(VIEW_TITLES)) $('nav-' + k).classList.toggle('on', k === v);
+  $('tbMine').hidden = !mine; $('kbar').hidden = !mine; $('tbTasks').hidden = v !== 'tasks';
+  $('crumbs').innerHTML = `Tareas <span>/</span> ${VIEW_TITLES[v]}`;
   try { localStorage.setItem('view', v); } catch {}
+  window.scrollTo(0, 0);
+  if (location.hash !== VIEW_HASH[v]) history.replaceState(null, '', VIEW_HASH[v]);
+  if (!mine) { mwClose(); $('mwDrawer').classList.remove('open'); }
+  if (v !== 'tasks') tkClose();
+  if (mine) { mw.view = v; mwInitUsers(); if (!mw.data && !mw.loading) mwLoad(); else mwRender(); }
   if (v === 'sprint') {
     const cur = Number($('spSprint').value);
     $('spSprint').innerHTML = sprints().map(s => `<option value="${s.id}">${esc(s.name)}${s.state === 'active' ? ' (activo)' : ''}</option>`).join('');
@@ -801,6 +1330,10 @@ function renderSprintChart() {
   if (!spData) return;
   const { sprint } = spData, fu = $('spUser').value;
   $('spRange').textContent = sprint.startDate ? `${fmtDate(sprint.startDate)} → ${fmtDate(sprint.endDate)} · sin fines de semana` : '';
+  $('spHeroName').textContent = sprint.name;
+  $('spHeroDates').textContent = sprint.startDate ? `${fmtLargo(parseDay(sprint.startDate))} → ${fmtLargo(parseDay(sprint.endDate))}` : 'Sin fechas';
+  $('spK-days').textContent = sprint.endDate ? workdaysBetween(autoStart(), sprint.endDate) : '—';
+  $('spK-tasks').textContent = spData.issues.filter(i => !fu || (fu === '__none' ? !i.assignee : i.assignee === fu)).length;
   if (!sprint.startDate) return $('spBody').innerHTML = '<div class="empty">Este sprint aún no ha empezado.</div>';
   const issues = spData.issues.filter(i => !fu || (fu === '__none' ? !i.assignee : i.assignee === fu));
   const { days, prev } = sprintDays(sprint, issues, spPrev);
@@ -808,11 +1341,12 @@ function renderSprintChart() {
   const total = past.length ? past[past.length - 1].total : 0;
   const best = past.reduce((b, d) => d.items.length > (b?.items.length ?? -1) ? d : b, null);
   $('spBody').innerHTML = `
-    ${burnSection('spBurn', 'Informe de trabajo completado', 'todo el sprint', 'las tareas')}
-    ${fu === cfg.jira?.me ? burnSection('spMine', 'Mi trabajo completado', 'solo mis tareas asignadas', 'mis tareas', true)
-      : burnSection('spMine', 'Trabajo completado personal', fu ? (fu === '__none' ? 'tareas sin responsable' : `solo las tareas de ${esc(fu)}`) : 'elige una persona', 'sus tareas', true)}
+    <section class="box sp-box">${burnSection('spBurn', 'Informe de trabajo completado', 'todo el sprint', 'las tareas')}</section>
+    <section class="box sp-box">${fu === cfg.jira?.me ? burnSection('spMine', 'Mi trabajo completado', 'solo mis tareas asignadas', 'mis tareas')
+      : burnSection('spMine', 'Trabajo completado personal', fu ? (fu === '__none' ? 'tareas sin responsable' : `solo las tareas de ${esc(fu)}`) : 'elige una persona', 'sus tareas')}</section>
+    <section class="box sp-box">
 
-    <h3 class="chart-title" style="font-size:14px;margin-top:22px;display:flex;gap:12px;align-items:center;flex-wrap:wrap">Tareas subidas${fu ? ` <span class="muted" style="font-weight:400">· ${fu === '__none' ? 'sin responsable' : esc(fu)}</span>` : ''}
+    <h3 class="chart-title" style="font-size:15px;margin-top:0;display:flex;gap:12px;align-items:center;flex-wrap:wrap">Tareas subidas${fu ? ` <span class="muted" style="font-weight:400">· ${fu === '__none' ? 'sin responsable' : esc(fu)}</span>` : ''}
       <label class="muted" style="font-weight:400" title="Tareas creadas antes del inicio del sprint y movidas a él"><input type="checkbox" style="width:auto" ${spPrev ? 'checked' : ''} onchange="spPrev = this.checked; renderSprintChart()"> Incluir las creadas antes del sprint</label></h3>
     <div class="tiles">
       <div class="tile"><div class="v">${total}</div><div class="l">tareas ${spPrev ? 'en el sprint' : 'subidas durante el sprint'}</div></div>
@@ -820,16 +1354,16 @@ function renderSprintChart() {
       <div class="tile"><div class="v">${past.length ? num(inSprint / past.length) : '0'}</div><div class="l">tareas por día hábil</div></div>
       <div class="tile"><div class="v">${prev.length}</div><div class="l">creadas antes del sprint ${spPrev ? '(incluidas)' : '(no incluidas)'}</div></div>
     </div>
-    <div class="chart-title">Acumulado de tareas</div>
-    <div class="chart" id="spLine"></div>
-    <div class="chart-title" style="margin-top:14px">Tareas subidas por día${best?.items.length ? ` <span class="muted">· máximo ${best.items.length} el ${WD[best.dt.getDay()]} ${fmtDate(best.date)}</span>` : ''}</div>
-    <div class="chart" id="spBars"></div>
+    <div class="sp-two"><div><div class="chart-title">Acumulado de tareas</div>
+    <div class="chart" id="spLine"></div></div>
+    <div><div class="chart-title">Tareas subidas por día${best?.items.length ? ` <span class="muted">· máximo ${best.items.length} el ${WD[best.dt.getDay()]} ${fmtDate(best.date)}</span>` : ''}</div>
+    <div class="chart" id="spBars"></div></div></div>
     <p class="muted" style="margin:10px 0 0">Solo días de lunes a viernes; la línea discontinua vertical marca el corte del fin de semana. Lo que pasa en sábado o domingo cuenta el lunes siguiente.
       El informe de trabajo completado usa los mismos datos que Jira; solo se quitan del eje los sábados y domingos.</p>
     <details style="margin-top:10px"><summary class="muted" style="cursor:pointer">Ver tabla por día</summary>
       <table class="day-table"><tr><th>Día</th><th>Tareas subidas</th><th>Acumulado</th></tr>
       ${past.map(d => `<tr><td>${WD[d.dt.getDay()]} ${fmtDate(d.date)}</td><td>${d.items.length}</td><td>${d.total}</td></tr>`).join('')}</table>
-    </details>`;
+    </details></section>`;
   drawBurnup(spBurn, 'spBurn');
   drawMine(fu);
   drawSprintChart('spLine', days, 'line', spPrev ? prev.length : 0);
@@ -940,6 +1474,11 @@ function drawBurnup(b, id) {
   const scopeNow = evs.length ? evs[evs.length - 1].scope : b.start_scope, closedNow = evs.length ? evs[evs.length - 1].closed : 0;
   const valAt = (t, k, ini) => { let v = ini; for (const e of evs) { if (e.t <= t) v = e[k]; else break; } return v; };
   const guideAt = (t) => scopeNow * Math.min(1, wt(t) / plannedTotal);
+  if (id === 'spBurn') {  // el encabezado resume el informe del equipo
+    $('spK-pct').textContent = scopeNow ? Math.round(100 * closedNow / scopeNow) + '%' : '0%';
+    $('spK-pts').textContent = `${num(closedNow)}/${num(scopeNow)}`;
+    $('spHeroSub').textContent = closedNow >= guideAt(hoy) ? 'Vais por delante de la directriz. 🎉' : `Vais ${num(guideAt(hoy) - closedNow)} puntos por detrás de la directriz.`;
+  }
   $(id + 'Info').innerHTML = `<b>Fecha</b> - ${fmtLargo(new Date(b.start))} - ${fmtLargo(new Date(planned))}${late ? ` <span class="warn">(fin previsto superado: ${b.finished ? `cerrado el ${fmtLargo(new Date(b.now))}` : 'el sprint sigue abierto'})</span>` : ''} · <span class="muted">${esc(b.field)}</span> ·
     cerrados <b>${num(closedNow)}</b> de <b>${num(scopeNow)}</b> · directriz ahora <b>${num(guideAt(hoy))}</b>
     <span class="muted">(${closedNow >= guideAt(hoy) ? (id === 'spMine' ? 'vas adelantado' : 'vais adelantados') : (id === 'spMine' ? 'vas atrasado' : 'vais atrasados')})</span>`;
@@ -1258,6 +1797,602 @@ function drawPerfRank(st, who, unit) {
   box.innerHTML = `<svg viewBox="0 0 ${W} ${H}" height="${H}" role="img" aria-label="Media por sprint de cada persona">${g}</svg>`;
 }
 let spResize; window.addEventListener('resize', () => { clearTimeout(spResize); spResize = setTimeout(() => { if (!$('sprintView').hidden) { renderSprintChart(); if ($('perfBox').open) renderPerformance(); } }, 150); });
+
+// ---------- Mis tareas: Historias y subtareas de una persona, editadas directamente en Jira ----------
+// Tres vistas sobre los mismos datos: Bandeja (lo urgente primero), Tablero (columnas por estado) y Tabla (con panel
+// de detalle). Las Historias son el espejo de las tareas del Planner (la sincronización del jefe lleva los cambios
+// allí): se pueden editar tras un aviso. Las subtareas solo si las creó el usuario (el servidor también lo exige).
+const FESTIVOS = new Set(['2026-11-02', '2026-11-16', '2026-12-08', '2026-12-25', '2027-01-01', '2027-01-11',
+  '2027-03-22', '2027-03-25', '2027-03-26', '2027-05-01', '2027-05-10', '2027-05-31', '2027-06-07', '2027-07-05',
+  '2027-07-20', '2027-08-07', '2027-08-16', '2027-10-18', '2027-11-01', '2027-11-15', '2027-12-08', '2027-12-25']);
+const mw = { data: null, byKey: {}, account: null, loading: false, ticket: 0, warned: false, view: 'bandeja',
+             scope: null, epicP2: null, filt: 'open', query: '', selected: null, openEpics: {}, showDone: {},
+             attnAll: false, log: [], alertOpen: null, lanes: {} };
+let mwSoonDays = 3; try { mwSoonDays = Number(localStorage.getItem('mwSoon')) || 3; } catch {}
+const MINE_VIEWS = ['bandeja', 'tablero', 'tabla'];
+const CATS = [['new', 'Por hacer'], ['indeterminate', 'En curso'], ['done', 'Finalizada']];
+const MESES = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic'];
+const EPIC_COLORS = ['#5B5BD6', '#D6409F', '#12A594', '#E5484D', '#F76B15', '#0090FF', '#8E4EC6', '#3E9B4F'];
+const isHist = (it) => !it.subtask;
+const isOpen = (it) => it.category !== 'done';
+const isStory = (it) => /histor|story/i.test(it.type);
+const canEdit = (it) => !it.subtask || it.mine;
+const mwItems = () => mw.data ? mw.data.items : [];
+const mwParents = () => mwItems().filter(isHist);
+const mwSubsOf = (key) => mwItems().filter(i => i.subtask && i.parent === key);
+const byDue = (a, b) => (a.due_date || '9').localeCompare(b.due_date || '9') || a.key.localeCompare(b.key);
+const isWorkday = (d) => !isWeekend(d) && !FESTIVOS.has(iso(d));
+const shortDate = (d) => d ? `${Number(d.slice(8, 10))} ${MESES[Number(d.slice(5, 7)) - 1]}` : '';
+const activeSprint = () => sprints().find(s => s.state === 'active');
+const inSprint = (p) => p.sprint?.state === 'active';
+const epicName = (k) => k ? (mw.data?.epics[k] || k) : 'Sin épica';
+// Color por épica: cada épica cargada recibe uno distinto, en orden de clave (sin épica = gris)
+const epicColor = (k) => { const ks = Object.keys(mw.data?.epics || {}).sort(); return k && ks.includes(k) ? EPIC_COLORS[ks.indexOf(k) % EPIC_COLORS.length] : 'var(--faint)'; };
+const epicOf = (it) => it.subtask ? mw.byKey[it.parent]?.parent : it.parent;
+const etag = (it) => { const k = epicOf(it); return `<span class="etag" style="--ec:${epicColor(k)}">${esc(epicName(k))}</span>`; };
+// "PROYECTO/CLIENTE - Instalar…" → "Instalar…": el prefijo del proyecto ya lo dice la etiqueta de la épica
+function cleanTitle(s) {
+  const parts = (s || '').split(/\s+-\s+/);
+  return parts.length > 1 && !/[a-záéíóúñ]/.test(parts[0]) ? parts.slice(1).join(' - ') : s;
+}
+function addWorkdays(fromIso, n) {
+  let d = parseDay(fromIso);
+  while (n > 0) { d = new Date(d.getFullYear(), d.getMonth(), d.getDate() + 1); if (isWorkday(d)) n--; }
+  return iso(d);
+}
+function workdaysBetween(a, b) {
+  let n = 0, d = parseDay(a); const end = parseDay(b);
+  while (d < end) { d = new Date(d.getFullYear(), d.getMonth(), d.getDate() + 1); if (isWorkday(d)) n++; }
+  return n;
+}
+// Las fechas solo son urgentes en el sprint activo; en el backlog son orientativas (se muestran sin alarma)
+const inSprintItem = (it) => inSprint(it.subtask ? (mw.byKey[it.parent] || it) : it);
+const isLate = (it) => isOpen(it) && it.due_date && it.due_date < autoStart() && inSprintItem(it);
+const isSoon = (it) => isOpen(it) && it.due_date && !isLate(it) && inSprintItem(it) && it.due_date <= addWorkdays(autoStart(), mwSoonDays);
+const isPastBacklog = (it) => isOpen(it) && it.due_date && it.due_date < autoStart() && !inSprintItem(it);
+const progress = (p) => p.progress?.total ? p.progress.done / p.progress.total : (isOpen(p) ? 0 : 1);
+const progTxt = (p) => p.progress?.total ? `${p.progress.done}/${p.progress.total}` : '';
+const bar = (f, extra = '') => `<span class="bar" ${extra}><i style="width:${Math.round(f * 100)}%"></i></span>`;
+function dueHtml(it) {
+  if (!it.due_date) return '<span class="due">sin fecha</span>';
+  const backlog = !inSprintItem(it);
+  return `<span class="due ${isLate(it) ? 'late' : isSoon(it) ? 'soon' : backlog ? 'bl' : ''}"
+    title="Cierre: ${fmtDate(it.due_date)}${backlog ? ' · backlog: fecha orientativa' : ''}"><svg class="ico" viewBox="0 0 24 24">
+    <rect x="4" y="5" width="16" height="15" rx="2.5"/><path d="M4 10h16M9 3v4M15 3v4"/></svg>${shortDate(it.due_date)}${isLate(it) ? ' · vencida' : isPastBacklog(it) ? ' · pasada' : ''}</span>`;
+}
+const quickDue = (it) => (isSoon(it) || isLate(it)) && canEdit(it) && autoDue() > it.due_date
+  ? `<button class="mini qd" onclick="event.stopPropagation(); mwPostpone('${it.key}', autoDue())" title="Cambiar el cierre al ${fmtDate(autoDue())} (fin de mes)">→ ${shortDate(autoDue())}</button>` : '';
+const placeTag = (it) => inSprintItem(it) ? '<span class="kind sp">🏃 Sprint</span>' : '<span class="kind">📥 Backlog</span>';
+const pillHtml = (it) => canEdit(it)
+  ? `<button type="button" class="pill s-${it.category}" onclick="mwStMenu(event, '${it.key}')" title="Cambiar estado">${esc(it.status)}</button>`
+  : `<span class="pill s-${it.category}" title="La creó ${esc(it.creator || 'otra persona')}: solo lectura">${esc(it.status)}</span>`;
+// Elementos de la persona según el alcance elegido (sprint activo, backlog o todo)
+function scoped() {
+  const all = mwParents();
+  return mw.scope === 'sprint' ? all.filter(inSprint) : mw.scope === 'backlog' ? all.filter(p => !inSprint(p)) : all;
+}
+function scopeSeg(id) {
+  const all = mwParents(), n = { sprint: all.filter(inSprint).length, backlog: all.filter(p => !inSprint(p)).length, all: all.length };
+  $(id).innerHTML = [['sprint', '🏃 Sprint actual'], ['backlog', '📥 Backlog'], ['all', 'Todo']].map(([k, l]) =>
+    `<button class="${mw.scope === k ? 'on' : ''}" onclick="mw.scope = '${k}'; mwRender()">${l}<span class="cnt">${n[k]}</span></button>`).join('');
+}
+
+function mwInitUsers() {
+  const sel = $('mwUser');
+  if (sel.options.length || !cfg?.jira) return;
+  const me = cfg.jira.me_id;
+  sel.innerHTML = users().map(u => `<option value="${u.accountId}">${esc(u.displayName)}${u.accountId === me ? ' (yo)' : ''}</option>`).join('');
+  sel.value = me;
+  $('mwSoon').value = String(mwSoonDays);
+}
+
+async function mwLoad() {
+  if (!cfg?.jira) { $('mwMsg').innerHTML = '<div class="empty">Conecta Jira para ver tus tareas.</div>'; return; }
+  const acc = $('mwUser').value || cfg.jira.me_id, ticket = ++mw.ticket;
+  mw.loading = true;
+  if (!mw.data || mw.account !== acc) $('mwMsg').innerHTML = '<div class="empty"><span class="spinner"></span> Leyendo de Jira…</div>';
+  try {
+    const d = await api(`/api/mywork?account_id=${encodeURIComponent(acc)}&done=${$('mwDone').checked}`);
+    if (ticket !== mw.ticket) return;
+    if (mw.account !== acc) mw.scope = null;
+    mw.data = d; mw.account = acc; mw.loadedAt = new Date();
+    mw.byKey = Object.fromEntries(d.items.map(i => [i.key, i]));
+    $('mwMsg').innerHTML = '';
+  } catch (e) {
+    if (ticket === mw.ticket) $('mwMsg').innerHTML = `<div class="note err">${esc(e.message)}</div>`;
+    return;
+  } finally { if (ticket === mw.ticket) mw.loading = false; }
+  mw.scope ||= mwParents().some(inSprint) ? 'sprint' : 'backlog';
+  mwRender();
+}
+
+// ---------- Alertas (panel lateral) ----------
+function mwAlerts() {
+  const t = autoStart();
+  const mine = mwItems().filter(i => i.assigned && isOpen(i));
+  const parentDue = (i) => i.subtask ? mw.byKey[i.parent]?.due_date : null;
+  return [
+    { id: 'late', icon: '🔴', label: 'Vencidas en el sprint', cls: 'late', items: mine.filter(isLate),
+      note: (i) => `venció el ${fmtDate(i.due_date)} · ${workdaysBetween(i.due_date, t)} días hábiles de retraso` },
+    { id: 'soon', icon: '🟠', label: 'Por vencer en el sprint', cls: 'soon', items: mine.filter(isSoon),
+      note: (i) => i.due_date === t ? 'vence hoy' : `vence el ${fmtDate(i.due_date)}` },
+    { id: 'backlog', icon: '📥', label: 'Backlog con fecha pasada', items: mine.filter(isPastBacklog),
+      note: (i) => `fecha orientativa: ${fmtDate(i.due_date)} · no está en el sprint` },
+    { id: 'hist', icon: '🔵', label: 'Historias pendientes', items: mine.filter(isHist),
+      note: (i) => `${progTxt(i) || '0/0'} subtareas · cierre ${fmtDate(i.due_date) || 'sin fecha'}` },
+    { id: 'ready', icon: '✅', label: 'Listas para cerrar', items: mine.filter(i => isHist(i) && i.progress.total && i.progress.done === i.progress.total),
+      note: () => 'todas sus subtareas están finalizadas' },
+    { id: 'nobreak', icon: '⚪', label: 'Sin desglosar', items: mine.filter(i => isHist(i) && !i.progress.total && isStory(i)),
+      note: () => 'no tiene subtareas' },
+    { id: 'dates', icon: '⚠️', label: 'Fechas incoherentes',
+      items: mine.filter(i => !i.due_date || (i.start_date && i.start_date > i.due_date) || (parentDue(i) && i.due_date > parentDue(i))),
+      note: (i) => !i.due_date ? 'sin fecha de cierre' : i.start_date && i.start_date > i.due_date ? 'empieza después de su cierre'
+        : `cierra después que su Historia (${fmtDate(parentDue(i))})` },
+  ];
+}
+function mwRenderAlerts() {
+  const groups = mwAlerts(), mine = mw.account === cfg.jira.me_id;
+  const urgent = groups[0].items.length + groups[1].items.length;
+  for (const id of mine ? ['mwBadge', 'mwBell'] : ['mwBell']) {  // el del menú es siempre el del usuario conectado
+    $(id).hidden = !urgent; $(id).textContent = urgent;
+    $(id).title = `${groups[0].items.length} vencidas · ${groups[1].items.length} por vencer`;
+  }
+  $('mwAlertInfo').textContent = mine ? '' : `de ${users().find(u => u.accountId === mw.account)?.displayName || 'otra persona'}`;
+  mw.alertOpen ||= new Set(groups.filter(g => ['late', 'soon', 'ready'].includes(g.id) && g.items.length).map(g => g.id));
+  $('mwAlerts').innerHTML = groups.map(g => `<details class="al-group" ${mw.alertOpen.has(g.id) ? 'open' : ''}
+      ontoggle="this.open ? mw.alertOpen.add('${g.id}') : mw.alertOpen.delete('${g.id}')">
+    <summary><span>${g.icon} ${g.label}</span><b class="${g.items.length ? g.cls || '' : 'muted'}">${g.items.length}</b></summary>
+    ${g.items.length ? g.items.sort(byDue).map(i => `<div class="al-item" onclick="mwOpen('${i.key}')"><span class="pill s-${i.category}" style="padding:2px 6px"></span>
+      <div><div class="al-title">${esc(cleanTitle(i.summary))}</div><div class="muted">${i.key} · ${esc(g.note(i))}</div></div></div>`).join('')
+      : '<p class="muted al-empty">Nada por aquí.</p>'}</details>`).join('');
+}
+function mwSetSoon(v) { mwSoonDays = Number(v); try { localStorage.setItem('mwSoon', v); } catch {} mwRender(); }
+function mwDrawer(open, group) {
+  open = open ?? !$('mwDrawer').classList.contains('open');
+  if (group) { mw.alertOpen?.add(group); mwRenderAlerts(); }
+  $('mwDrawer').classList.toggle('open', open);
+}
+
+// ---------- Render ----------
+function mwRender() {
+  if (!mw.data) return;
+  mwRenderAlerts();
+  if (mw.view === 'bandeja') renderP1();
+  if (mw.view === 'tablero') renderP2();
+  if (mw.view === 'tabla') renderP3();
+  if (mw.selected && mw.byKey[mw.selected]) mwOpen(mw.selected, true);
+  renderJiraStatus();
+}
+
+// 1. Bandeja
+function renderP1() {
+  scopeSeg('p1-scope');
+  const me = mw.account === cfg.jira.me_id, who = users().find(u => u.accountId === mw.account)?.displayName || '';
+  const list = scoped(), open = list.filter(isOpen), sp = activeSprint(), today = autoStart();
+  const scopeTxt = { sprint: 'en el sprint', backlog: 'en el backlog', all: 'en total' }[mw.scope];
+  const d = new Date().toLocaleDateString('es-CO', { weekday: 'long', day: 'numeric', month: 'long' });
+  $('p1-date').textContent = d.charAt(0).toUpperCase() + d.slice(1);
+  $('p1-hello').textContent = me ? `Hola, ${(cfg.jira.me || '').split(' ')[0].replace(/^./, c => c.toUpperCase())} 👋` : `Tareas de ${who}`;
+  $('p1-sum').textContent = open.length ? `${me ? 'Tienes' : 'Tiene'} ${open.length} ${open.length === 1 ? 'historia o tarea abierta' : 'historias o tareas abiertas'} ${scopeTxt}.`
+    : `No hay historias ni tareas abiertas ${scopeTxt}.`;
+  const late = mwItems().filter(i => i.assigned && isLate(i)), need = mwItems().filter(i => i.assigned && (isLate(i) || isSoon(i))).sort(byDue);
+  const pastBl = mwItems().filter(i => i.assigned && isPastBacklog(i));
+  const blLine = pastBl.length ? `<p class="muted" style="margin:10px 0 0;font-size:13px">📥 En el backlog ${pastBl.length === 1 ? 'hay 1 tarea' : `hay ${pastBl.length} tareas`}
+    con fecha pasada; como no están en el sprint no se cuentan como vencidas. <button class="linkbtn" onclick="mwDrawer(true, 'backlog')">Ver</button></p>` : '';
+  $('k-open').textContent = open.length;
+  $('k-late').textContent = late.length;
+  $('attn').classList.toggle('calm', !need.length);
+  $('k-days').textContent = sp ? workdaysBetween(today, sp.endDate) : '—';
+  $('k-days-l').textContent = sp ? 'días hábiles' : 'sin sprint';
+  $('p1-info').textContent = `Leído a las ${mw.loadedAt.toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit' })}`;
+
+  // Necesita tu atención: vencidas y por vencer de todo lo asignado (no solo del alcance)
+  const a = $('attn');
+  if (!need.length) a.innerHTML = `<p class="ok-msg">Nada vencido ni por vencer en el sprint. Buen trabajo.</p>${blLine}`;
+  else {
+    const shown = mw.attnAll ? need : need.slice(0, 5), target = mwPostponeDate();
+    a.innerHTML = '<h3>Necesita tu atención</h3>' + shown.map(it => `<div class="attn-row" onclick="mwOpen('${it.key}')">
+        <div class="t"><div>${esc(cleanTitle(it.summary))}</div><div class="ikey">${it.key}${it.subtask ? ' · subtarea' : ''}</div></div>
+        ${dueHtml(it)}${pillHtml(it)}
+        ${canEdit(it) ? `<div class="acts" onclick="event.stopPropagation()"><button class="mini go" onclick="mwSetStatus('${it.key}', 'done')">Marcar finalizada</button>
+          ${target !== autoDue() ? `<button class="mini" onclick="mwPostpone('${it.key}')">Mover al ${shortDate(target)}</button>` : ''}${quickDue(it)}</div>` : ''}</div>`).join('')
+      + (need.length > 5 ? `<div style="margin-top:8px"><button class="linkbtn" onclick="mw.attnAll = !mw.attnAll; renderP1()">${mw.attnAll ? 'Ver menos' : `Ver las ${need.length}`}</button></div>` : '') + blLine;
+  }
+
+  // Épicas plegables con su avance; las finalizadas se esconden en una línea
+  const byEpic = {};
+  for (const p of list) (byEpic[p.parent || ''] ||= []).push(p);
+  const keys = Object.keys(byEpic).sort((x, y) => epicName(x).localeCompare(epicName(y)));
+  $('p1-epics').innerHTML = keys.length ? keys.map(ek => {
+    const items = byEpic[ek].sort(byDue), done = items.filter(i => !isOpen(i)), act = items.filter(isOpen);
+    if (!(ek in mw.openEpics)) mw.openEpics[ek] = act.length > 0;
+    let rows = act.map(rowP1).join('');
+    if (done.length) {
+      if (mw.showDone[ek]) rows += done.map(rowP1).join('');
+      rows += `<div class="more"><button class="linkbtn" onclick="mw.showDone['${ek}'] = !mw.showDone['${ek}']; renderP1()">${mw.showDone[ek]
+        ? 'Ocultar finalizadas' : `Ver ${done.length} ${done.length === 1 ? 'finalizada' : 'finalizadas'}`}</button></div>`;
+    }
+    return `<div class="epic ${mw.openEpics[ek] ? '' : 'closed'}" style="--ec:${epicColor(ek)}">
+      <button class="epic-h" onclick="mw.openEpics['${ek}'] = !mw.openEpics['${ek}']; renderP1()" aria-expanded="${!!mw.openEpics[ek]}">
+        <span class="chev">▾</span><span class="name">${esc(epicName(ek))}</span>${bar(done.length / items.length)}<span class="cnt">${done.length} de ${items.length}</span></button>
+      <div class="epic-b">${rows}</div></div>`;
+  }).join('') : `<div class="epic"><div class="empty">${mw.scope === 'sprint' ? 'No hay nada asignado en el sprint activo. Mira el backlog.' : 'No hay nada por aquí.'}</div></div>`;
+
+  // Lateral: sprint, resumen y actividad
+  const mineSprint = mwParents().filter(inSprint), pct = mineSprint.length ? Math.round(100 * mineSprint.filter(i => !isOpen(i)).length / mineSprint.length) : 0;
+  $('p1-sprint-name').textContent = sp ? sp.name : 'Sin sprint activo';
+  $('p1-left').textContent = sp ? `${shortDate(sp.startDate)} → ${shortDate(sp.endDate)} · ${workdaysBetween(today, sp.endDate)} días hábiles restantes` : '';
+  $('p1-ring').style.strokeDashoffset = (326.7 * (1 - pct / 100)).toFixed(1);
+  $('p1-ringpct').textContent = pct + '%';
+  $('p1-pct').textContent = mineSprint.length ? `${pct}% de ${me ? 'tus' : 'sus'} ${mineSprint.length} historias y tareas del sprint finalizadas` : `${me ? 'No tienes' : 'No tiene'} historias en el sprint activo.`;
+  let days = '';
+  if (sp) for (let c = parseDay(sp.startDate); iso(c) <= sp.endDate; c = new Date(c.getFullYear(), c.getMonth(), c.getDate() + 1))
+    if (isWorkday(c)) days += `<i class="${iso(c) < today ? 'past' : iso(c) === today ? 'now' : ''}" title="${fmtDate(iso(c))}"></i>`;
+  $('p1-days').innerHTML = days;
+  const groups = mwAlerts();
+  $('p1-stats').innerHTML = `<h3>Resumen</h3><p class="sub">Historias y tareas ${scopeTxt}</p>`
+    + CATS.map(([c, l]) => `<div class="stat"><span class="pill s-${c}">${l}</span><b>${list.filter(i => i.category === c).length}</b></div>`).join('')
+    + groups.filter(g => ['backlog', 'ready', 'nobreak', 'dates'].includes(g.id) && g.items.length).map(g =>
+      `<button class="stat" onclick="mwDrawer(true, '${g.id}')"><span>${g.icon} ${g.label}</span><b>${g.items.length}</b></button>`).join('');
+  $('feed').innerHTML = mw.log.length ? mw.log.slice(0, 6).map(m => `<li><i>${esc(initials(cfg.jira.me))}</i><div>${esc(m.text)}
+    <small>${m.at.toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit' })}</small></div></li>`).join('')
+    : '<li class="empty-f">Aún no hay cambios. Cambia un estado o una fecha y aparecerá aquí.</li>';
+}
+function rowP1(it) {
+  const p = it.progress?.total ? `${bar(progress(it))}<span class="ikey">${progTxt(it)}</span>` : '';
+  return `<div class="row" onclick="mwOpen('${it.key}')"><div class="ttl"><b title="${esc(it.summary)}">${esc(cleanTitle(it.summary))}</b>
+    <div class="meta">${placeTag(it)}<span class="kind">${esc(it.type)}</span><span class="ikey">${it.key}</span>${p}${it.assigned ? '' : `<span class="muted">de ${esc(it.assignee || 'nadie')}</span>`}</div></div>
+    <span style="display:flex;gap:6px;align-items:center">${quickDue(it)}${dueHtml(it)}</span><span onclick="event.stopPropagation()">${pillHtml(it)}</span></div>`;
+}
+
+// 2. Tablero
+function renderP2() {
+  scopeSeg('p2-scope');
+  const sp = activeSprint(), list = scoped(), today = autoStart();
+  const eks = [...new Set(list.map(p => p.parent || ''))].sort((x, y) => epicName(x).localeCompare(epicName(y)));
+  if (mw.epicP2 != null && !eks.includes(mw.epicP2)) mw.epicP2 = null;
+  $('p2-epics').innerHTML = `<button class="${mw.epicP2 == null ? 'on' : ''}" onclick="mw.epicP2 = null; renderP2()">Todas las épicas</button>`
+    + eks.map(k => `<button class="${mw.epicP2 === k ? 'on' : ''}" onclick="mw.epicP2 = '${k}'; renderP2()">${esc(epicName(k))}</button>`).join('');
+  const parents = list.filter(p => mw.epicP2 == null || (p.parent || '') === mw.epicP2);
+  // Carriles: una Historia por fila con sus subtareas; las tareas sueltas (sin subtareas y que no son Historia) van juntas al final
+  const loose = parents.filter(p => !isStory(p) && !mwSubsOf(p.key).length);
+  const lanes = parents.filter(p => !loose.includes(p))
+    .sort((a, b) => (isOpen(b) - isOpen(a)) || epicName(a.parent).localeCompare(epicName(b.parent)) || byDue(a, b));
+  const cards = [...lanes.flatMap(h => mwSubsOf(h.key)), ...loose];
+  const done = cards.filter(i => !isOpen(i)).length, pct = cards.length ? Math.round(100 * done / cards.length) : 0;
+  $('p2-title').textContent = mw.scope === 'sprint' ? (sp ? sp.name : 'Sprint actual') : mw.scope === 'backlog' ? 'Backlog' : 'Todo';
+  $('p2-bar').style.width = pct + '%';
+  $('p2-left').textContent = `${pct}% de las subtareas listo` + (mw.scope === 'sprint' && sp ? ` · quedan ${workdaysBetween(today, sp.endDate)} días hábiles` : '');
+  const count = (c) => cards.filter(i => i.category === c).length;
+  const card = (it) => `<div class="scard ${isOpen(it) ? '' : 'd'} ${isLate(it) ? 'lateC' : ''}" draggable="${canEdit(it)}"
+      ondragstart="event.dataTransfer.setData('text/plain', '${it.key}')" onclick="mwOpen('${it.key}')">
+    <input type="checkbox" ${isOpen(it) ? '' : 'checked'} ${canEdit(it) ? '' : `disabled title="La creó ${esc(it.creator || 'otra persona')}: solo lectura"`}
+      onclick="event.stopPropagation()" onchange="mwToggleSub('${it.key}', this.checked)" aria-label="Finalizar ${it.key}">
+    <div class="b"><div class="t">${esc(cleanTitle(it.summary))}</div>
+      <div class="f"><span class="mav" title="${esc(it.assignee || 'Sin asignar')}">${esc(initials(it.assignee))}</span><span class="ikey">${it.key}</span>
+        ${dueHtml(it)}${quickDue(it)}${it.category === 'indeterminate' ? `<span class="pill s-${it.category}">${esc(it.status)}</span>` : ''}</div></div></div>`;
+  const cells = (items) => CATS.map(([c]) => `<div class="cell" data-col="${c}" ondragover="mwDragOver(event)" ondragleave="this.classList.remove('over')"
+      ondrop="mwDrop(event, '${c}')">${items.filter(i => i.category === c).sort(byDue).map(card).join('')}</div>`).join('');
+  const lane = (h) => {
+    const subs = mwSubsOf(h.key), shut = mw.lanes[h.key] ?? !isOpen(h);
+    return `<section class="lane ${h.assigned ? '' : 'other'}" style="--ec:${epicColor(h.parent)}">
+      <div class="lane-h"><button class="tg" onclick="mw.lanes['${h.key}'] = ${!shut}; renderP2()" aria-expanded="${!shut}" title="${shut ? 'Mostrar' : 'Ocultar'} subtareas">${shut ? '▸' : '▾'}</button>
+        ${etag(h)}<span class="nm" onclick="mwOpen('${h.key}')" title="${esc(h.summary)}">${esc(cleanTitle(h.summary))}
+          <span class="ikey" style="font-weight:400"> · ${h.key}${h.assigned ? '' : ` · de ${esc(h.assignee || 'nadie')}`}</span></span>
+        ${h.progress?.total ? `${bar(progress(h))}<span class="ikey">${progTxt(h)}</span>` : ''}${dueHtml(h)}
+        <span onclick="event.stopPropagation()">${pillHtml(h)}</span>
+        ${isOpen(h) && !inSprint(h) && activeSprint() ? `<button class="mini" onclick="mwToSprint('${h.key}')" title="Pasar la Historia (y sus subtareas) al ${esc(activeSprint().name)}">→ Sprint</button>` : ''}
+        ${isOpen(h) ? `<button class="mini" onclick="mwSetStatus('${h.key}', 'done')" title="Finalizar la Historia (pregunta si cerrar también tus subtareas abiertas)">✓ Cerrar Historia</button>` : ''}
+        <button class="mini" onclick="mwOpen('${h.key}'); setTimeout(() => $('mdNewSub')?.focus(), 50)" title="Agregar una subtarea a esta Historia">+ Subtarea</button></div>
+      ${shut ? '' : `<div class="lane-b">${subs.length ? cells(subs) : '<div class="lane-empty">Sin subtareas tuyas todavía: usa «+ Subtarea» para desglosarla.</div>'}</div>`}</section>`;
+  };
+  $('board').innerHTML = `<div class="lanes-h">${CATS.map(([c, l]) => `<div data-col="${c}"><span class="pill s-${c}">${l}</span><span>${count(c)}</span></div>`).join('')}</div>`
+    + lanes.map(lane).join('')
+    + (loose.length ? `<section class="lane" style="--ec:var(--faint)"><div class="lane-h"><span class="nm" style="cursor:default">Tareas sin Historia</span>
+        <span class="ikey">${loose.length}</span></div><div class="lane-b">${cells(loose)}</div></section>` : '')
+    + (lanes.length || loose.length ? '' : '<p class="muted" style="padding:20px 4px">No hay Historias ni tareas en este alcance. Prueba con «Todo».</p>');
+}
+function mwDragOver(e) {
+  e.preventDefault();
+  document.querySelectorAll('.cell.over').forEach(x => x.classList.remove('over'));
+  e.currentTarget.classList.add('over');
+}
+function mwDrop(e, cat) {
+  e.preventDefault(); e.currentTarget.classList.remove('over');
+  const it = mw.byKey[e.dataTransfer.getData('text/plain')];
+  if (it && it.category !== cat) mwSetStatus(it.key, cat);
+}
+
+// 3. Tabla
+function renderP3() {
+  const list = scoped(), q = norm(mw.query);
+  const counts = { open: list.filter(isOpen).length, late: list.filter(isLate).length, soon: list.filter(isSoon).length,
+                   done: list.filter(i => !isOpen(i)).length, all: list.length };
+  const chips = [['open', 'Abiertas'], ['late', 'Vencidas', true], ['soon', 'Por vencer', true], ['done', 'Finalizadas'], ['all', 'Todas']];
+  $('p3-chips').innerHTML = `<div class="seg" id="p3-scope"></div>`
+    + chips.filter(([k, , alert]) => !alert || counts[k] || mw.filt === k).map(([k, l, alert]) =>
+      `<button class="chip ${alert ? 'alert' : ''} ${mw.filt === k ? 'on' : ''}" onclick="mw.filt = '${k}'; renderP3()">${l} <b>${counts[k]}</b></button>`).join('')
+    + (mw.query ? `<button class="chip on" onclick="$('gsearch').value = ''; mwGlobalSearch('')" title="Quitar búsqueda">“${esc(mw.query)}” ✕</button>` : '');
+  scopeSeg('p3-scope');
+  const ok = (x) => mw.filt === 'all' || (mw.filt === 'open' && isOpen(x)) || (mw.filt === 'done' && !isOpen(x))
+    || (mw.filt === 'late' && isLate(x)) || (mw.filt === 'soon' && isSoon(x));
+  const hit = (x) => !q || norm(x.key + ' ' + x.summary).includes(q) || mwSubsOf(x.key).some(s => norm(s.key + ' ' + s.summary).includes(q));
+  const rows = list.filter(x => ok(x) && hit(x)).sort(byDue), byEpic = {};
+  for (const p of rows) (byEpic[p.parent || ''] ||= []).push(p);
+  let html = '<div class="tr th"><span>Título</span><span class="prog">Avance</span><span class="dcol">Cierre</span><span>Estado</span></div>';
+  for (const ek of Object.keys(byEpic).sort((x, y) => epicName(x).localeCompare(epicName(y)))) {
+    html += `<div class="grp" style="--ec:${epicColor(ek)}">${esc(epicName(ek))} <span class="muted" style="font-weight:600">${byEpic[ek].length}</span></div>`;
+    html += byEpic[ek].map(it => `<div class="tr item ${mw.selected === it.key ? 'sel' : ''}" id="row-${it.key}" onclick="mwOpen('${it.key}')" tabindex="0"
+        onkeydown="if (event.key === 'Enter') mwOpen('${it.key}')"><div class="ttl"><b title="${esc(it.summary)}">${esc(cleanTitle(it.summary))}</b>
+        <span class="ikey" style="display:flex;gap:6px;align-items:center">${mw.scope === 'all' ? placeTag(it) : ''}${it.key} · ${esc(it.type)}${it.assigned ? '' : ` · de ${esc(it.assignee || 'nadie')}`}</span></div>
+      <div class="prog">${it.progress?.total ? `${bar(progress(it))}${progTxt(it)}` : '<span>Sin subtareas</span>'}</div>
+      <div class="dcol" style="display:flex;gap:5px;align-items:center;flex-wrap:wrap">${dueHtml(it)}${quickDue(it)}</div><div onclick="event.stopPropagation()">${pillHtml(it)}</div></div>`).join('');
+  }
+  if (!rows.length) html += '<div class="tr" style="grid-template-columns:1fr;color:var(--muted)">No hay nada con este filtro. Prueba con «Todas» o cambia el alcance.</div>';
+  $('p3-table').innerHTML = html;
+}
+function mwGlobalSearch(v) {
+  mw.query = v;
+  if (mw.view !== 'tabla') { mw.filt = 'all'; setView('tabla'); } else renderP3();
+}
+
+// ---------- Detalle (panel lateral) ----------
+function mwOpen(key, keepScroll = false) {
+  const it = mw.byKey[key];
+  if (!it) return;
+  const scroll = keepScroll ? $('mwDetail').querySelector('.dr-b')?.scrollTop : 0;
+  mw.selected = key;
+  const dis = canEdit(it) ? '' : 'disabled', subs = isHist(it) ? mwSubsOf(key).sort(byDue) : [], p = it.progress;
+  const parent = it.subtask ? mw.byKey[it.parent] : null;
+  $('mwDetail').innerHTML = `<div class="dr-h"><div>${etag(it)}<h3>${esc(cleanTitle(it.summary))}</h3>
+      <span class="ikey" style="display:flex;gap:6px;align-items:center">${placeTag(it)}<a class="ikey" target="_blank" href="${browse(key)}" title="Abrir en Jira">${key} ↗</a> · ${esc(it.type)}</span>
+      ${parent ? `<div class="muted" style="margin-top:4px">Subtarea de <button class="linkbtn" onclick="mwOpen('${parent.key}')">${parent.key} · ${esc(cleanTitle(parent.summary).slice(0, 48))}</button></div>` : ''}</div>
+    <button class="x" onclick="mwClose()" aria-label="Cerrar">✕</button></div>
+    <div class="dr-b">
+      ${dis ? `<div class="dr-note">🔒 La creó ${esc(it.creator || 'otra persona')}: solo puedes verla.</div>`
+        : isStory(it) ? '<div class="dr-note warn">⚠️ Es el espejo de una tarea del Planner: al guardar, el cambio también llega allí.</div>' : ''}
+      <label class="dr-label">Título<textarea id="mdTitle" rows="2" ${dis}>${esc(it.summary)}</textarea></label>
+      <dl class="fields">
+        <dt>Estado</dt><dd><select id="mdStatus" ${dis}>${CATS.map(([c, l]) => `<option value="${c}" ${c === it.category ? 'selected' : ''}>${c === it.category ? esc(it.status) : l}</option>`).join('')}</select></dd>
+        <dt>Asignado</dt><dd><select id="mdUser" ${dis}>${mwUserOptions(it)}</select></dd>
+        <dt>Inicio</dt><dd><input type="date" id="mdStart" value="${it.start_date || ''}" ${dis}></dd>
+        <dt>Cierre</dt><dd style="display:flex;gap:6px"><input type="date" id="mdDue" value="${it.due_date || ''}" ${dis}>${!dis && autoDue() > (it.due_date || '') && isOpen(it)
+          ? `<button class="mini" type="button" onclick="$('mdDue').value = autoDue()" title="Poner el último día del mes (${fmtDate(autoDue())}); se guarda con «Guardar cambios»">Fin de mes</button>` : ''}</dd>
+        <dt>${it.subtask ? 'Historia' : 'Épica'}</dt><dd><select id="mdParent" ${dis}>${it.subtask ? mwParentOptions(it) : mwEpicOptions(it)}</select></dd>
+        <dt>Sprint</dt>${it.subtask || dis
+          ? `<dd class="muted" style="font-size:14px">${it.sprint ? esc(it.sprint.name) + (it.sprint.state === 'future' ? ' (futuro)' : '') : 'Backlog'}${it.subtask ? ' · el de su Historia' : ''}</dd>`
+          : `<dd><select id="mdSprint">${sprintOptions(it.sprint?.id, 'Backlog', it.sprint?.name)}</select></dd>`}
+      </dl>
+      <label class="dr-label">Descripción<textarea id="mdDesc" rows="6" ${dis} placeholder="Sin descripción">${esc(it.description)}</textarea></label>
+      ${isHist(it) ? `<div class="subs"><h4><span>Subtareas</span><span class="ikey">${p.done} de ${p.total} finalizadas</span></h4>
+        ${p.total ? `<div class="bar" style="margin-bottom:6px"><i style="width:${Math.round(100 * p.done / p.total)}%"></i></div>` : ''}
+        ${subs.map(s => `<div class="sub-i ${isOpen(s) ? '' : 'd'}"><input type="checkbox" ${isOpen(s) ? '' : 'checked'} ${canEdit(s) ? '' : 'disabled title="La creó otra persona"'}
+            onchange="mwToggleSub('${s.key}', this.checked)"><span onclick="mwOpen('${s.key}')">${esc(cleanTitle(s.summary))}
+            <span class="ikey" style="display:block">${s.key} · ${shortDate(s.due_date) || 'sin fecha'}</span></span></div>`).join('')}
+        ${p.total > subs.length ? `<p class="muted">${p.total - subs.length} subtarea(s) de otras personas no se muestran.</p>` : ''}
+        <div class="sub-add"><input id="mdNewSub" placeholder="Nueva subtarea… (Enter para crear)" onkeydown="if (event.key === 'Enter') mwCreateSub('${key}')">
+          <button onclick="mwCreateSub('${key}')">Agregar</button></div></div>` : ''}
+      <div class="muted">Creada por ${esc(it.creator || '—')}${it.assigned ? '' : ` · asignada a ${esc(it.assignee || 'nadie')}`}</div>
+    </div>
+    <div class="dr-f"><span id="mdMsg" class="err" style="font-size:13px"></span><span class="spacer"></span>
+      <button onclick="mwClose()">${dis ? 'Cerrar' : 'Cancelar'}</button>
+      ${dis ? '' : '<button class="primary" id="mdSave" onclick="mwSaveDetail()">Guardar cambios</button>'}</div>`;
+  $('mwDetail').classList.add('open'); $('scrim').classList.add('open'); $('mwDetail').setAttribute('aria-hidden', 'false');
+  if (scroll) $('mwDetail').querySelector('.dr-b').scrollTop = scroll;
+  document.querySelectorAll('.tr.item.sel').forEach(x => x.classList.remove('sel'));
+  $('row-' + key)?.classList.add('sel');
+}
+function mwClose() {
+  mw.selected = null;
+  $('mwDetail').classList.remove('open'); if (!tkSel) $('scrim').classList.remove('open'); $('mwDetail').setAttribute('aria-hidden', 'true');
+  document.querySelectorAll('.tr.item.sel').forEach(x => x.classList.remove('sel'));
+}
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape' && !$('askDlg').open) { if (!$('stMenu').hidden) $('stMenu').hidden = true; else if (mw.selected) mwClose(); else if (tkSel) tkClose(); }
+  if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') { e.preventDefault(); $('gsearch').focus(); $('gsearch').select(); }
+});
+
+function mwUserOptions(it) {
+  const list = !it.assignee_id || users().some(u => u.accountId === it.assignee_id) ? users()
+    : [{ accountId: it.assignee_id, displayName: it.assignee }, ...users()];
+  return '<option value="">— Sin asignar —</option>' + list.map(u =>
+    `<option value="${u.accountId}" ${u.accountId === it.assignee_id ? 'selected' : ''}>${esc(u.displayName)}</option>`).join('');
+}
+// Una subtarea se puede mover a cualquiera de las Historias cargadas (agrupadas por épica)
+function mwParentOptions(it) {
+  const groups = {};
+  for (const p of mwParents()) (groups[p.parent || ''] ||= []).push(p);
+  return Object.entries(groups).map(([ek, ps]) => `<optgroup label="${esc(epicName(ek))}">${ps.map(p =>
+    `<option value="${p.key}" ${p.key === it.parent ? 'selected' : ''}>${p.key} · ${esc(cleanTitle(p.summary).slice(0, 60))}</option>`).join('')}</optgroup>`).join('');
+}
+function mwEpicOptions(it) {
+  const list = !it.parent || jiraEpics().some(e => e.key === it.parent) ? jiraEpics()
+    : [{ key: it.parent, summary: epicName(it.parent) }, ...jiraEpics()];
+  return (it.parent ? '' : '<option value="">— Sin épica —</option>') + list.map(e =>
+    `<option value="${e.key}" ${e.key === it.parent ? 'selected' : ''}>${esc(e.summary)} (${e.key})</option>`).join('');
+}
+
+// ---------- Escritura en Jira ----------
+const initials = (name) => (name || '?').split(/\s+/).filter(Boolean).slice(0, 2).map(w => w[0].toUpperCase()).join('');
+let toastTimer;
+function toast(text, isErr = false) {
+  $('toast').querySelector('span').textContent = text; $('toast').classList.toggle('err', isErr);
+  $('toast').querySelector('i').textContent = isErr ? '!' : '✓';
+  $('toast').classList.add('show'); clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => $('toast').classList.remove('show'), isErr ? 5000 : 2600);
+}
+function mwLog(text) { mw.log.unshift({ text, at: new Date() }); toast(text); }
+
+function ask(title, bodyHtml, buttons) {
+  return new Promise(resolve => {
+    $('askTitle').textContent = title; $('askBody').innerHTML = bodyHtml;
+    $('askFoot').innerHTML = buttons.map((b, i) => `<button class="${b.primary ? 'primary' : ''}" data-i="${i}">${esc(b.label)}</button>`).join('');
+    $('askFoot').onclick = (e) => { const i = e.target.dataset?.i; if (i == null) return; $('askDlg').close(); resolve(buttons[i].value); };
+    $('askDlg').oncancel = () => resolve(null);
+    $('askDlg').showModal();
+  });
+}
+async function mwConfirmHist(it) {
+  if (!isStory(it) || mw.warned) return true;
+  const ok = await ask('⚠️ Cambio en una Historia', `<p style="margin:0"><b>${it.key}</b> ${esc(cleanTitle(it.summary))}</p>
+    <p style="margin:0">Es el espejo de una tarea del <b>Planner</b>${it.mine ? '' : ` y la creó ${esc(it.creator || 'otra persona')}`}.
+      El cambio se guarda en Jira y la sincronización lo lleva al Planner.</p>
+    <label style="display:flex;gap:6px;align-items:center;font-weight:400"><input type="checkbox" id="askNoMore" style="width:auto">
+      No volver a avisar hasta recargar la página</label>`,
+    [{ label: 'Cancelar', value: false }, { label: 'Guardar cambio', value: true, primary: true }]);
+  if (ok && $('askNoMore')?.checked) mw.warned = true;
+  return !!ok;
+}
+// Actualiza la incidencia en memoria y el avance de su Historia (y el de la anterior si se movió)
+function mwPut(r) {
+  const it = mw.byKey[r.key];
+  if (!it) return;
+  const wasDone = it.category === 'done', oldParent = it.parent;
+  Object.assign(it, r, { assigned: r.assignee_id === mw.account });
+  if (!it.subtask) return;
+  const nowDone = it.category === 'done', op = mw.byKey[oldParent]?.progress, np = mw.byKey[it.parent]?.progress;
+  if (oldParent !== it.parent) {
+    if (op) { op.total--; op.done -= wasDone; }
+    if (np) { np.total++; np.done += nowDone; }
+  } else if (np && wasDone !== nowDone) np.done += nowDone ? 1 : -1;
+}
+
+// Menú de estado al pulsar la píldora
+function mwStMenu(e, key) {
+  e.stopPropagation();
+  const it = mw.byKey[key], r = e.currentTarget.getBoundingClientRect(), m = $('stMenu');
+  m.innerHTML = CATS.filter(([c]) => c !== it.category).map(([c, l]) =>
+    `<button onclick="$('stMenu').hidden = true; mwSetStatus('${key}', '${c}')"><span class="pill s-${c}">${l}</span></button>`).join('');
+  m.hidden = false;
+  m.style.left = Math.min(r.left, innerWidth - m.offsetWidth - 10) + 'px';
+  m.style.top = (r.bottom + m.offsetHeight + 8 > innerHeight ? r.top - m.offsetHeight - 6 : r.bottom + 6) + 'px';
+}
+document.addEventListener('click', (e) => { if (!$('stMenu').hidden && !e.target.closest('#stMenu')) $('stMenu').hidden = true; });
+
+// Cambia el estado; al cerrar una Historia con subtareas abiertas pregunta si cerrar también las del usuario
+async function mwSetStatus(key, cat, confirmed = false) {
+  const it = mw.byKey[key];
+  if (!confirmed && !(await mwConfirmHist(it))) return false;
+  let subs = [];
+  if (isHist(it) && cat === 'done') {
+    const open = mwSubsOf(key).filter(isOpen), others = it.progress.total - it.progress.done - open.length;
+    if (open.length || others > 0) {
+      const v = await ask('Cerrar Historia', `<p style="margin:0"><b>${key}</b> ${esc(cleanTitle(it.summary))}</p>
+        ${open.length ? `<p style="margin:0">Tiene ${open.length} subtarea(s) abierta(s) de esta persona:</p>
+          <ul style="margin:0">${open.map(s => `<li>${s.key} ${esc(cleanTitle(s.summary))}${s.mine ? '' : ' 🔒'}</li>`).join('')}</ul>` : ''}
+        ${others > 0 ? `<p class="warn" style="margin:0">Además hay ${others} subtarea(s) abierta(s) de otras personas; esas no se tocan.</p>` : ''}`,
+        [{ label: 'Cancelar', value: null }, { label: 'Cerrar solo la Historia', value: 'one' },
+         ...(open.some(s => s.mine) ? [{ label: 'Cerrar también mis subtareas', value: 'all', primary: true }] : [])]);
+      if (!v) return false;
+      if (v === 'all') subs = open.filter(s => s.mine);
+    }
+  }
+  for (const k of [...subs.map(s => s.key), key]) {
+    try {
+      mwPut(await api(`/api/issues/${k}/status`, { method: 'POST',
+        body: JSON.stringify({ category: k === key ? cat : 'done', updated: mw.byKey[k].updated }) }));
+    } catch (e) {
+      toast(`${k}: ${e.status === 409 ? 'cambió en Jira desde que la cargaste; pulsa ↻ y vuelve a intentarlo' : e.message}`, true);
+      mwRender(); return false;
+    }
+  }
+  mwLog(`${key} pasó a ${mw.byKey[key].status}${subs.length ? ` (y ${subs.length} subtarea${subs.length > 1 ? 's' : ''})` : ''}`);
+  mwRender();
+  return true;
+}
+// "Mover al…": al fin del sprint activo si aún no pasó; si no, 5 días hábiles desde hoy
+function mwPostponeDate() {
+  const sp = activeSprint(), t = autoStart();
+  return sp && sp.endDate > t ? sp.endDate : addWorkdays(t, 5);
+}
+async function mwPostpone(key, to = mwPostponeDate()) {
+  const it = mw.byKey[key];
+  if (!(await mwConfirmHist(it))) return;
+  try {
+    mwPut(await api(`/api/issues/${key}`, { method: 'PATCH', body: JSON.stringify({ changes: { due_date: to }, updated: it.updated }) }));
+    mwLog(`${key} movida al ${shortDate(to)}`);
+  } catch (e) { toast(`${key}: ${e.status === 409 ? 'cambió en Jira; pulsa ↻' : e.message}`, true); }
+  mwRender();
+}
+// Pasa una Historia (con sus subtareas) al sprint activo
+async function mwToSprint(key) {
+  const it = mw.byKey[key], sp = activeSprint();
+  if (!sp || !(await mwConfirmHist(it))) return;
+  try {
+    mwPut(await api(`/api/issues/${key}`, { method: 'PATCH', body: JSON.stringify({ changes: { sprint: sp.id }, updated: it.updated }) }));
+    mwLog(`${key} pasó al ${sp.name}`); mwRender();  // sus subtareas van en el sprint de la Historia
+  } catch (e) { toast(`${key}: ${e.status === 409 ? 'cambió en Jira; pulsa ↻' : e.message}`, true); mwRender(); }
+}
+async function mwToggleSub(key, checked) {
+  if (!(await mwSetStatus(key, checked ? 'done' : 'new', true))) mwRender();
+}
+
+async function mwSaveDetail(force = false) {
+  const key = mw.selected, it = mw.byKey[key], val = (id) => $(id).value, or = (v) => v || null;
+  const changes = {}, title = val('mdTitle').replace(/\s*\n\s*/g, ' ').trim();
+  if (!title) return $('mdMsg').textContent = 'El título no puede quedar vacío';
+  if (title !== it.summary) changes.summary = title;
+  if (val('mdDesc') !== it.description) changes.description = val('mdDesc');
+  if (or(val('mdUser')) !== it.assignee_id) changes.assignee_id = or(val('mdUser'));
+  if (or(val('mdStart')) !== it.start_date) changes.start_date = or(val('mdStart'));
+  if (or(val('mdDue')) !== it.due_date) changes.due_date = or(val('mdDue'));
+  if (or(val('mdParent')) !== it.parent) changes.parent = or(val('mdParent'));
+  if ($('mdSprint') && (Number(val('mdSprint')) || null) !== (it.sprint?.id ?? null)) changes.sprint = Number(val('mdSprint')) || null;
+  const cat = val('mdStatus'), hasFields = Object.keys(changes).length > 0;
+  if (!hasFields && cat === it.category) return mwClose();
+  if (!force && !(await mwConfirmHist(it))) return;
+  $('mdSave').disabled = true; $('mdSave').innerHTML = '<span class="spinner"></span> Guardando…'; $('mdMsg').textContent = '';
+  try {
+    if (hasFields) {
+      mwPut(await api(`/api/issues/${key}`, { method: 'PATCH', body: JSON.stringify({ changes, updated: it.updated, force }) }));
+      mwLog(`${key} actualizada`);
+    }
+    if (cat !== it.category && !(await mwSetStatus(key, cat, true))) return;
+    mwClose(); mwRender();
+  } catch (e) {
+    if (e.status === 409) {
+      const cur = e.data.current;
+      const v = await ask('Cambió en Jira', `<p style="margin:0">Alguien modificó <b>${key}</b> en Jira desde que la cargaste.</p>
+        <p class="muted" style="margin:0">En Jira ahora: «${esc(cur.summary)}» · ${esc(cur.status)} · cierre ${fmtDate(cur.due_date) || '—'}
+          · ${esc(cur.assignee || 'sin asignar')}</p>`,
+        [{ label: 'Guardar mis cambios igualmente', value: 'mine' }, { label: 'Ver la versión de Jira', value: 'jira', primary: true }]);
+      if (v === 'mine') return mwSaveDetail(true);
+      mwPut(cur); mwRender(); return mwOpen(key);
+    }
+    $('mdMsg').textContent = e.message;
+  } finally {
+    if ($('mdSave')) { $('mdSave').disabled = false; $('mdSave').textContent = 'Guardar cambios'; }
+  }
+}
+
+async function mwCreateSub(pk) {
+  const input = $('mdNewSub'), title = input.value.trim();
+  if (!title) return;
+  const p = mw.byKey[pk], t = autoStart();
+  input.disabled = true;
+  try {
+    const r = await api(`/api/issues/${pk}/subtasks`, { method: 'POST', body: JSON.stringify({
+      summary: title, assignee_id: mw.account, start_date: t, due_date: p.due_date && p.due_date >= t ? p.due_date : t }) });
+    r.assigned = r.assignee_id === mw.account;
+    mw.data.items.push(r); mw.byKey[r.key] = r; p.progress.total++;
+    mwLog(`Subtarea ${r.key} creada en ${pk}`);
+    mwRender(); $('mdNewSub')?.focus();
+  } catch (e) { $('mdMsg').textContent = e.message; input.disabled = false; }
+}
+
+// El avatar vuelve a las tareas propias (por si se estaba mirando a otra persona)
+function mwShowMine() {
+  if (cfg?.jira && $('mwUser').value !== cfg.jira.me_id) { $('mwUser').value = cfg.jira.me_id; mwLoad(); }
+  if (!MINE_VIEWS.includes(mw.view) || $('mineView').hidden) setView('bandeja');
+}
+function toggleTheme() {
+  const r = document.documentElement;
+  const dark = r.dataset.theme ? r.dataset.theme === 'dark' : matchMedia('(prefers-color-scheme: dark)').matches;
+  r.dataset.theme = dark ? 'light' : 'dark';
+  try { localStorage.setItem('theme', r.dataset.theme); } catch {}
+  toast(dark ? 'Modo claro activado' : 'Modo oscuro activado');
+  if (!$('sprintView').hidden) renderSprintChart();
+}
 
 init();
 </script>

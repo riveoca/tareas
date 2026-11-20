@@ -44,6 +44,13 @@ Variables principales de `.env` (todas están explicadas en `.env.example`):
 ./tareas          # abre la app en http://127.0.0.1:8765
 ```
 
+### Inicio automático
+
+`inicio.sh` levanta la app en segundo plano (si no está corriendo) y abre una ventana de Chrome con la app y las
+pestañas de `pestanas.txt` (una URL por línea). Para que se ejecute al iniciar sesión en GNOME, se crea
+`~/.config/autostart/tareas.desktop` con `Exec=<ruta del proyecto>/inicio.sh`; se desactiva borrando ese archivo
+o en «Aplicaciones al inicio». El registro de cada arranque queda en `inicio.log`.
+
 ### Tareas
 
 1. En **⚙️ Configuración** se eligen el responsable, el sprint y las fechas que reciben las tareas nuevas.
@@ -52,9 +59,16 @@ Variables principales de `.env` (todas están explicadas en `.env.example`):
    - ✍️ **Escribir:** describes lo que hiciste. Si nombras a alguien del equipo, la tarea se le asigna a esa persona.
    - 📄 **Subir .txt:** archivos `.txt`, `.md`, `.log`, `.csv` o `.json` de hasta 2 MB.
    - 📋 **Lista rápida:** una tarea por línea, sin IA; una línea `# PROYECTO` elige la épica.
-3. En la **tabla de tareas** se editan título, épica, responsable, sprint, fechas y puntos, y se filtra por épica,
-   persona o estado. Con la selección múltiple se aplican cambios a varias tareas, se suben o se eliminan.
-   Los cambios se guardan automáticamente.
+   Con la metodología Planner → Historia → subtareas, la IA recibe las Historias abiertas de Jira (las tareas del
+   Planner) con sus subtareas y cuelga cada trabajo como **subtarea** de su Historia (1 punto cada una; el sprint es el de la
+   Historia). Lo que no encaja en ninguna queda «Sin Historia» y se sube como tarea suelta de la épica. Si el texto
+   dice que algo ya se hizo, la tarea se marca «Hecha» y se sube como Finalizada; y si ese trabajo ya existía como
+   subtarea planificada, no se duplica: la app ofrece **marcarla como finalizada** en Jira.
+3. La **lista de tareas** las agrupa por épica y muestra título, responsable, sprint, fechas y su clave de Jira (o
+   «Pendiente»); se filtra por épica, persona o estado. Al pulsar una tarea se abre un panel lateral donde se editan
+   título, épica, responsable, sprint, fechas, puntos, tipo, prioridad, etiquetas y descripción, y desde el que se
+   sube o se elimina. Con las casillas se aplican cambios a varias tareas, se suben o se eliminan. Los cambios se
+   guardan automáticamente.
 4. **Subir a Jira** crea las épicas y sus tareas y las mueve al sprint. Las tareas que ya tienen clave
    (p. ej. `PRJ-123`) se actualizan en lugar de duplicarse. Eliminar una tarea en la app no la borra en Jira.
 
@@ -120,6 +134,42 @@ incidencias del proyecto (unos 10 s); el servidor guarda el resultado 10 minutos
 - Si Jira rechaza un campo opcional (prioridad, story points, fecha de inicio) porque no está en la pantalla del
   proyecto, la tarea se crea sin él y se avisa en el resultado.
 
+### Mis tareas
+
+La app tiene un menú lateral con cinco secciones: tres vistas de **Mis tareas** (Bandeja, Tablero y Tabla),
+**Desglose con IA** y **Avance del sprint** (ambas con un encabezado que resume el plan o el sprint); abajo, el cambio
+entre modo claro y oscuro. El logo lleva a la Bandeja y el avatar vuelve a las tareas propias. Las tres vistas de Mis
+tareas muestran las Historias y tareas de Jira asignadas a la persona elegida arriba (por defecto, el usuario
+conectado), con un selector de alcance: **🏃 Sprint actual**, **📥 Backlog** o **Todo**.
+
+- **Bandeja**: saludo con abiertas, vencidas y días hábiles que quedan del sprint; el bloque **Necesita tu atención**
+  (vencidas y por vencer, con «Marcar finalizada» y «Mover al» fin del sprint); las épicas plegables con su avance
+  (las finalizadas se esconden en «Ver N finalizadas»); y a la derecha el anillo del sprint, el resumen por estado
+  y la actividad de la sesión.
+- **Tablero**: columnas Por hacer / En curso / Finalizada; arrastrar una tarjeta cambia su estado en Jira.
+- **Tabla**: fichas para filtrar (abiertas, vencidas, por vencer, finalizadas, todas), filas agrupadas por épica.
+
+En todas, la píldora de estado abre un menú para cambiarlo y al pulsar una tarea se abre el **panel de detalle**:
+título, estado, asignado, inicio, cierre, épica o Historia, descripción y, en una Historia, sus subtareas (con
+casilla para cerrarlas o reabrirlas y un campo para crear otra). **Guardar cambios** escribe directamente en Jira:
+
+- Las subtareas solo se pueden editar si las creó el usuario; las demás se abren en solo lectura (🔒).
+- Al cambiar una Historia se avisa antes, porque es el espejo de una tarea del Planner.
+- Si la incidencia cambió en Jira desde que se cargó, se pregunta qué versión conservar.
+- Al cerrar una Historia con subtareas abiertas se ofrece cerrarlas también.
+
+**Fechas del sprint y del backlog.** Solo las fechas de lo que está en el sprint activo son urgentes: «Vencidas» y
+«Por vencer» (en rojo y naranja, en la Bandeja, las alertas y el número del menú) cuentan solo eso. En el backlog la
+fecha es orientativa: se muestra en gris («· pasada» si ya pasó) y lo atrasado va al grupo de alertas «Backlog con
+fecha pasada». Cada tarea lleva su etiqueta 🏃 Sprint o 📥 Backlog. En lo vencido o por vencer aparece el botón
+rápido **→ fin de mes** («→ 31 oct»), que cambia el cierre al último día del mes actual; el panel de detalle tiene
+un botón «Fin de mes» junto al campo de cierre.
+
+El buscador de arriba (**Ctrl+K**) lleva a la Tabla filtrada. La campana 🔔 abre el panel lateral de **alertas**
+(vencidas, por vencer, Historias pendientes, listas para cerrar, sin subtareas y fechas incoherentes); el número
+rojo del menú son las vencidas y por vencer del usuario conectado. Los títulos se muestran sin el prefijo del
+proyecto en mayúsculas («PROYECTO/CLIENTE - …»), porque la épica ya va en su etiqueta de color.
+
 ## Estructura
 
 | Archivo | Contenido |
@@ -141,6 +191,10 @@ incidencias del proyecto (unos 10 s); el servidor guarda el resultado 10 minutos
 | `GET /api/sprint/{id}/issues` | Tareas del sprint con fecha de creación y responsable |
 | `GET /api/sprint/{id}/burnup?assignee=` | Informe de trabajo completado (del equipo o de una persona) |
 | `GET /api/performance?refresh=` | Puntos y tareas cerradas por persona y sprint en todo el histórico (caché de 10 min) |
+| `GET /api/mywork?account_id=&done=` | Historias y subtareas de una persona, con épicas y avance |
+| `PATCH /api/issues/{key}` | Edita una incidencia en Jira (403 si es una subtarea ajena, 409 si cambió desde que se cargó) |
+| `POST /api/issues/{key}/status` | Cambia el estado (por hacer, en curso, finalizada) |
+| `POST /api/issues/{key}/subtasks` | Crea una subtarea en una Historia |
 
 ## Desarrollo
 

@@ -40,7 +40,8 @@ def _get() -> Workspace:
 
 @app.get("/")
 def index():
-    return FileResponse(STATIC / "index.html")
+    # Sin caché: tras actualizar la app el navegador debe cargar la interfaz nueva, no una copia guardada
+    return FileResponse(STATIC / "index.html", headers={"Cache-Control": "no-cache"})
 
 
 @app.get("/api/config")
@@ -70,11 +71,24 @@ def _run_breakdown(content: str, provider: str, filename: str | None) -> dict:
     if not content.strip():
         raise HTTPException(400, "No hay contenido que desglosar")
     try:
-        note, ws.plan, added, skipped = llm.breakdown(ws.plan, ws.defaults, jira_meta(), content, provider, filename)
+        note, ws.plan, added, dupes, to_close = llm.breakdown(ws.plan, ws.defaults, _fresh_meta(), content, provider, filename)
     except llm.LLMError as e:
         raise HTTPException(502, str(e))
     store.save_session(ws)
-    return {"workspace": ws, "note": note, "added": added, "skipped": skipped}
+    return {"workspace": ws, "note": note, "added": added, "skipped": len(dupes), "duplicates": dupes, "to_close": to_close}
+
+
+def _fresh_meta() -> dict | None:
+    """Metadatos con las Historias y subtareas leídas de Jira en este momento (la caché puede tener 10 min):
+    así la IA y la deduplicación ven también lo que se creó hace un rato."""
+    meta = jira_meta()
+    if not meta:
+        return meta
+    try:
+        j = JiraClient()
+        return {**meta, "stories": j.stories(), "recent_subtasks": j.recent_subtasks()}
+    except Exception:  # sin conexión momentánea: se usa la caché
+        return meta
 
 
 class TextIn(BaseModel):
@@ -146,6 +160,77 @@ def performance(refresh: bool = False):
             raise HTTPException(502, str(e))
         _perf_cache["at"] = time.time()
     return _perf_cache["data"]
+
+
+# ---------- Mis tareas: Historias y subtareas en Jira (lectura y edición directa) ----------
+
+def _jira_call(fn, *args):
+    try:
+        return fn(*args)
+    except (JiraError, httpx.HTTPError) as e:
+        raise HTTPException(502, str(e))
+
+
+@app.get("/api/mywork")
+def my_work(account_id: str, done: bool = False):
+    """Historias y subtareas asignadas a una persona, con sus Historias y épicas y el avance de cada Historia."""
+    return _jira_call(JiraClient().my_work, account_id, done)
+
+
+def _editable(j: JiraClient, key: str, updated: str | None, force: bool) -> dict:
+    """Comprueba que la incidencia se puede tocar: las subtareas solo si las creó el usuario; las Historias sí
+    (la interfaz avisa antes). Si alguien la cambió en Jira desde que se cargó, 409 con el valor actual."""
+    item = _jira_call(j.get_item, key)
+    if item["subtask"] and not item["mine"]:
+        raise HTTPException(403, f"{key} la creó {item['creator'] or 'otra persona'}: solo puedes editar las subtareas que creaste")
+    if updated and item["updated"] != updated and not force:
+        raise HTTPException(409, {"message": f"{key} cambió en Jira desde que la cargaste", "current": item})
+    return item
+
+
+class EditIn(BaseModel):
+    changes: dict
+    updated: str | None = None
+    force: bool = False
+
+
+@app.patch("/api/issues/{key}")
+def edit_issue(key: str, body: EditIn):
+    j = JiraClient()
+    _editable(j, key, body.updated, body.force)
+    return _jira_call(j.edit_item, key, body.changes)
+
+
+class StatusIn(BaseModel):
+    category: str  # new | indeterminate | done
+    updated: str | None = None
+    force: bool = False
+
+
+@app.post("/api/issues/{key}/status")
+def issue_status(key: str, body: StatusIn):
+    if body.category not in ("new", "indeterminate", "done"):
+        raise HTTPException(400, "Estado no válido")
+    j = JiraClient()
+    _editable(j, key, body.updated, body.force)
+    return _jira_call(j.set_status, key, body.category)
+
+
+class SubtaskIn(BaseModel):
+    summary: str
+    assignee_id: str | None = None
+    start_date: str | None = None
+    due_date: str | None = None
+    description: str = ""
+
+
+@app.post("/api/issues/{key}/subtasks")
+def add_subtask(key: str, body: SubtaskIn):
+    if not body.summary.strip():
+        raise HTTPException(400, "La subtarea necesita un título")
+    j = JiraClient()
+    return _jira_call(j.create_subtask, key, body.summary.strip(), body.assignee_id, body.start_date,
+                      body.due_date, body.description)
 
 
 class PushIn(BaseModel):

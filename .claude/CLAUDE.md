@@ -7,6 +7,9 @@ textos de la app en español.
 ## Ejecutar
 - `./tareas` → app en http://127.0.0.1:8765 (usa `.venv/bin/python -m tareas_app`)
 - `./tareas check` → comprueba Jira, Claude y Ollama
+- `inicio.sh` → arranque al iniciar sesión (`~/.config/autostart/tareas.desktop`): app sin navegador + Chrome con
+  la app y las pestañas de `pestanas.txt`; log en `inicio.log`. Si la app ya corre, no la relanza: tras cambiar
+  código hay que matar ese proceso (`pkill -f "tareas_app serve"`) antes de reiniciar.
 - Tras cambiar código Python hay que reiniciar el servidor (no hay recarga automática).
 - No hay tests; para validar lógica usa scripts cortos con `.venv/bin/python` (p.ej. `_add_to_plan`).
 
@@ -15,6 +18,7 @@ textos de la app en español.
   llamadas a cada IA y `_add_to_plan` (épicas, títulos, responsable, fechas, deduplicación).
 - `jira.py` — cliente Jira: metadatos, `_fields_for` (campos enviados) y `push_plan` (crea/actualiza).
 - `models.py` — salida estructurada de la IA (`AIResult`) y datos de la app (`Plan`, `Epic`, `Task`, `Defaults`).
+- `dedup.py` — detecta subtareas repetidas por parecido de título (al desglosar y otra vez al subir).
 - `server.py` — API FastAPI; `store.py` — persistencia JSON en `tareas.db`; `config.py` — lee `.env`.
 - `static/index.html` — toda la interfaz (JS inline). Dos vistas: Tareas y "Avance del sprint" (`#sprint`), en SVG y sin
   fines de semana: "Informe de trabajo completado" del equipo como Jira: alcance (rojo), cerrados (verde),
@@ -28,7 +32,14 @@ textos de la app en español.
   por media por sprint y solo en los sprints cerrados de la persona elegida (decisión del usuario: llevar más sprints no da ventaja). Incluye tendencia
   (últimos 3 vs 3 anteriores) y reparto por épica (`by_sprint[id].epics`).
 
+- Vistas de Mis tareas (`#bandeja`, `#tablero`, `#tabla`, menú lateral): Historias y subtareas de una persona editadas directamente en Jira
+  (`GET /api/mywork` → `JiraClient.my_work`; `PATCH /api/issues/{key}`, `/status`, `/subtasks`) y panel de alertas
+  calculado en el navegador (días hábiles con la lista `FESTIVOS`). Detalle en `MEMORIA_PROYECTO.md` §5.8.
+
 ## Reglas de negocio (decididas por el usuario)
+- Metodología: Planner (jefe) → Historia espejo en Jira (su sincronización lleva los cambios de la Historia al
+  Planner) → subtareas de 1 punto cada una. En «Mis tareas» solo se editan las subtareas que creó el usuario; las Historias
+  sí, con aviso.
 - En Jira cada tarea lleva solo su épica como padre; **no se envían etiquetas**.
 - Desglose: 1 story point = un entregable con sentido propio (horas–1 día), no cada paso; nada de tareas
   repetidas o triviales. Los pasos van en la descripción.

@@ -21,6 +21,9 @@ class AITask(BaseModel):
     start_date: str | None = Field(description="Fecha de inicio YYYY-MM-DD si el texto la indica, o null")
     due_date: str | None = Field(description="Fecha de fin YYYY-MM-DD si el texto la indica, o null")
     labels: list[str] = Field(description="Etiquetas sin espacios")
+    historia: str | None = Field(description="Clave de la Historia existente (p.ej. PROJ-123) a la que pertenece como "
+                                              "subtarea, o null si no encaja en ninguna")
+    done: bool = Field(description="true si el texto dice que el trabajo ya está hecho; false si está por hacer")
 
 
 class AIEpic(BaseModel):
@@ -36,6 +39,8 @@ class AIResult(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     reply: str = Field(description="Resumen breve (1-2 frases) de lo desglosado")
+    cerrar: list[str] = Field(description="Claves de subtareas YA EXISTENTES (abiertas) en <historias_existentes> que el "
+                                          "texto dice que ya se hicieron; no se crean de nuevo")
     epics: list[AIEpic] = Field(description="Solo las tareas NUEVAS, agrupadas por épica")
 
 
@@ -60,6 +65,11 @@ class Task(BaseModel):
     priority: str | None = None
     labels: list[str] = []
     jira_key: str | None = None
+    # Metodología Planner → Historia → subtareas: con parent_key la tarea se sube como Subtarea de esa Historia
+    # (1 punto y sin sprint: hereda el de la Historia); sin ella, como Tarea suelta de la épica (forma anterior).
+    parent_key: str | None = None
+    parent_summary: str | None = None
+    done: bool = False  # al subirla se pasa a Finalizada (registro de trabajo ya hecho)
 
 
 class Epic(BaseModel):
