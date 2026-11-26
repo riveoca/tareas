@@ -2,6 +2,11 @@
 
 [Español](README.md) · **English**
 
+[![CI](https://github.com/riveoca/tareas/actions/workflows/ci.yml/badge.svg)](https://github.com/riveoca/tareas/actions/workflows/ci.yml)
+![Python](https://img.shields.io/badge/Python-3.11%2B-3776AB?logo=python&logoColor=white)
+![FastAPI](https://img.shields.io/badge/FastAPI-009688?logo=fastapi&logoColor=white)
+[![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
+
 Local web app to log the team's work in **Jira Cloud** and follow sprint progress.
 
 - **Tasks:** you describe the work you did in your own words, or upload log files, and an AI
@@ -11,6 +16,12 @@ Local web app to log the team's work in **Jira Cloud** and follow sprint progres
   Data is read from Jira and weekends are left out of the time axis.
 
 Built with FastAPI, SQLite and a single HTML page with no front-end dependencies.
+
+![Inbox: sprint tasks, alerts and progress](docs/img/bandeja.png)
+
+![Board by Story with To do, In progress and Done columns](docs/img/tablero.png)
+
+*Screenshots with sample data.*
 
 ## Requirements
 

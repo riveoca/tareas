@@ -2,6 +2,11 @@
 
 **Español** · [English](README.en.md)
 
+[![CI](https://github.com/riveoca/tareas/actions/workflows/ci.yml/badge.svg)](https://github.com/riveoca/tareas/actions/workflows/ci.yml)
+![Python](https://img.shields.io/badge/Python-3.11%2B-3776AB?logo=python&logoColor=white)
+![FastAPI](https://img.shields.io/badge/FastAPI-009688?logo=fastapi&logoColor=white)
+[![Licencia: MIT](https://img.shields.io/badge/Licencia-MIT-green.svg)](LICENSE)
+
 App web local para registrar en **Jira Cloud** el trabajo del equipo y seguir el avance del sprint.
 
 - **Tareas:** describes con tus palabras el trabajo realizado, o cargas archivos de registro, y una IA
@@ -11,6 +16,12 @@ App web local para registrar en **Jira Cloud** el trabajo del equipo y seguir el
   Los datos se leen de Jira y los fines de semana no aparecen en el eje.
 
 Hecha con FastAPI, SQLite y una única página HTML sin dependencias de front.
+
+![Bandeja: tareas del sprint, alertas y avance](docs/img/bandeja.png)
+
+![Tablero por Historia con columnas Por hacer, En curso y Finalizada](docs/img/tablero.png)
+
+*Capturas con datos de ejemplo.*
 
 ## Requisitos
 
